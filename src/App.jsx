@@ -232,10 +232,6 @@ export default function MoviePluss() {
 
   const [wordPopup, setWordPopup] = useState(null);
 
-  /*
-    پنجره ترجمه ابتدا در بالا سمت راست فیلم قرار می‌گیرد.
-    چون داخل player قرار دارد، در حالت تمام‌صفحه نیز نمایش داده می‌شود.
-  */
   const [translationPosition, setTranslationPosition] =
     useState({
       top: 18,
@@ -396,11 +392,6 @@ export default function MoviePluss() {
     [playVideo]
   );
 
-  /*
-    کارت‌ها از سمت چپ شروع می‌شوند.
-    دکمه «کارت قبلی» در سمت راست قرار دارد.
-    دکمه «کارت بعدی» در سمت چپ قرار دارد.
-  */
   const goToPreviousCard = useCallback(() => {
     const previousIndex = currentCueRef.current - 1;
 
@@ -435,10 +426,6 @@ export default function MoviePluss() {
     const list = cuesRef.current;
     const index = currentCueRef.current;
 
-    /*
-      در حالت تکرار، پخش از ابتدای کارت جاری شروع می‌شود
-      و تا ابتدای کارت بعدی ادامه پیدا می‌کند.
-    */
     if (repeatRef.current && index >= 0 && list[index]) {
       const current = list[index];
       const next = list[index + 1];
@@ -760,20 +747,16 @@ export default function MoviePluss() {
     handleTranslationPointerUp,
   ]);
 
-  /*
-    کلیک راست روی ویدیو → نمایش کارت بعدی
-    کلیک چپ روی ویدیو → توقف پخش
-    منوی راست‌کلیک پیش‌فرض مرورگر غیرفعال می‌شود.
-  */
+  // کلیک راست روی ویدیو → کارت بعدی
   const handleVideoContextMenu = (event) => {
     event.preventDefault();
     event.stopPropagation();
     goToNextCard();
   };
 
+  // کلیک چپ روی ویدیو → کارت قبلی
   const handleVideoClick = () => {
-    // توقف پخش با کلیک چپ
-    pauseVideo();
+    goToPreviousCard();
   };
 
   useEffect(() => {
@@ -1097,7 +1080,7 @@ export default function MoviePluss() {
           ) : (
             <>
               {/*
-                کلیک چپ روی ویدیو → توقف پخش
+                کلیک چپ روی ویدیو → کارت قبلی
                 کلیک راست روی ویدیو → کارت بعدی
                 دابل کلیک → تمام‌صفحه
               */}
@@ -1334,23 +1317,22 @@ export default function MoviePluss() {
                   </ControlButton>
 
                   {/*
-                    دکمه‌های جلو/عقب فیلم حذف شده و
-                    دکمه‌های کارت قبلی/بعدی جایگزین شده‌اند.
-                    ChevronRight = کارت قبلی
-                    ChevronLeft = کارت بعدی
+                    دکمه‌های کارت قبلی/بعدی با فلش‌های جابجا شده:
+                    ChevronLeft = کارت قبلی
+                    ChevronRight = کارت بعدی
                   */}
                   <ControlButton
                     onClick={goToPreviousCard}
                     title="کارت قبلی"
                   >
-                    <ChevronRight size={20} />
+                    <ChevronLeft size={20} />
                   </ControlButton>
 
                   <ControlButton
                     onClick={goToNextCard}
                     title="کارت بعدی"
                   >
-                    <ChevronLeft size={20} />
+                    <ChevronRight size={20} />
                   </ControlButton>
 
                   <ControlButton
@@ -1422,7 +1404,6 @@ export default function MoviePluss() {
                     ))}
                   </select>
 
-                  {/* تکرار جمله کنار کنترل سرعت */}
                   <button
                     onClick={() =>
                       setRepeatOn((value) => !value)
@@ -1459,7 +1440,7 @@ export default function MoviePluss() {
                     onClick={() =>
                       setShowEnglish((value) => !value)
                     }
-                    title="ترجمه انگلیسی"
+                    title="نمایش زیرنویس انگلیسی"
                   >
                     <Subtitles size={18} />
                   </ControlButton>
@@ -1469,7 +1450,7 @@ export default function MoviePluss() {
                     onClick={() =>
                       setShowPersian((value) => !value)
                     }
-                    title="ترجمه فارسی"
+                    title="نمایش زیرنویس فارسی"
                   >
                     <Subtitles size={18} />
                   </ControlButton>
@@ -1591,11 +1572,6 @@ export default function MoviePluss() {
               </span>
             </div>
 
-            {/*
-              مهم:
-              direction: ltr باعث می‌شود کارت‌ها از سمت چپ
-              شروع شوند و کارت اول در سمت چپ قرار بگیرد.
-            */}
             <div
               ref={cardsRef}
               style={{
