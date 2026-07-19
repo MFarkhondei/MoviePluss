@@ -10,6 +10,8 @@ import {
   ChevronUp,
   Film,
   Gauge,
+  Maximize,
+  Minimize,
   Pause,
   Play,
   Repeat,
@@ -164,6 +166,7 @@ async function autoDecodeFile(file) {
 
 export default function MoviePluss() {
   const videoRef = useRef(null);
+  const playerRef = useRef(null);
   const cardsRef = useRef(null);
 
   const cuesRef = useRef([]);
@@ -203,6 +206,7 @@ export default function MoviePluss() {
   const [filesPanelOpen, setFilesPanelOpen] = useState(true);
   const [showEnglish, setShowEnglish] = useState(true);
   const [showPersian, setShowPersian] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [wordPopup, setWordPopup] = useState(null);
 
@@ -223,6 +227,26 @@ export default function MoviePluss() {
       videoRef.current.playbackRate = playbackRate;
     }
   }, [playbackRate]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(
+        document.fullscreenElement === playerRef.current
+      );
+    };
+
+    document.addEventListener(
+      "fullscreenchange",
+      handleFullscreenChange
+    );
+
+    return () => {
+      document.removeEventListener(
+        "fullscreenchange",
+        handleFullscreenChange
+      );
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -272,6 +296,20 @@ export default function MoviePluss() {
     }
   }, [playVideo, pauseVideo]);
 
+  const toggleFullscreen = useCallback(async () => {
+    if (!playerRef.current) return;
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await playerRef.current.requestFullscreen();
+      }
+    } catch (error) {
+      console.error("Fullscreen error:", error);
+    }
+  }, []);
+
   const jumpToCue = useCallback((index, autoplay = true) => {
     const video = videoRef.current;
     const cue = cuesRef.current[index];
@@ -289,6 +327,7 @@ export default function MoviePluss() {
     video.currentTime = cue.start;
   }, []);
 
+  // دکمه سمت چپ: کارت بعدی
   const nextSentence = useCallback(() => {
     const nextIndex = currentIndexRef.current + 1;
 
@@ -297,6 +336,7 @@ export default function MoviePluss() {
     }
   }, [jumpToCue]);
 
+  // دکمه سمت راست: کارت قبلی
   const previousSentence = useCallback(() => {
     const previousIndex = currentIndexRef.current - 1;
 
@@ -568,6 +608,15 @@ export default function MoviePluss() {
         event.preventDefault();
         replaySentence();
       }
+
+      if (event.code === "KeyF") {
+        event.preventDefault();
+        toggleFullscreen();
+      }
+
+      if (event.code === "Escape" && document.fullscreenElement) {
+        document.exitFullscreen();
+      }
     };
 
     window.addEventListener("keydown", handleKeyboard);
@@ -580,6 +629,7 @@ export default function MoviePluss() {
     nextSentence,
     previousSentence,
     replaySentence,
+    toggleFullscreen,
   ]);
 
   const activeCue =
@@ -646,6 +696,29 @@ export default function MoviePluss() {
 
         .frame-card:hover {
           border-color: ${COLORS.yellow} !important;
+        }
+
+        .fullscreen-player {
+          width: 100%;
+          height: auto;
+          background: #000;
+        }
+
+        .fullscreen-player:fullscreen {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100vw;
+          height: 100vh;
+          border: none;
+          border-radius: 0;
+        }
+
+        .fullscreen-player:fullscreen video {
+          width: 100%;
+          height: 100%;
+          max-height: 100vh;
+          object-fit: contain;
         }
 
         ::-webkit-scrollbar {
@@ -809,6 +882,8 @@ export default function MoviePluss() {
           }}
         >
           <div
+            ref={playerRef}
+            className="fullscreen-player"
             style={{
               position: "relative",
               overflow: "hidden",
@@ -827,11 +902,13 @@ export default function MoviePluss() {
               }
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
+              onDoubleClick={toggleFullscreen}
               style={{
                 display: "block",
                 width: "100%",
                 maxHeight: "58vh",
                 background: "#000",
+                cursor: "pointer",
               }}
             />
 
@@ -903,6 +980,7 @@ export default function MoviePluss() {
                   alignItems: "center",
                   gap: 4,
                   padding: "0 16px",
+                  pointerEvents: "none",
                 }}
               >
                 {showEnglish && activeCue.en && (
@@ -943,22 +1021,67 @@ export default function MoviePluss() {
             )}
           </div>
 
-          <input
-            type="range"
-            min="0"
-            max={duration || 0}
-            step="0.01"
-            value={currentTime}
-            onMouseDown={handleProgressMouseDown}
-            onMouseUp={handleProgressMouseUp}
-            onTouchStart={handleProgressMouseDown}
-            onTouchEnd={handleProgressMouseUp}
-            onChange={handleProgressChange}
+          <div
             style={{
-              display: "block",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
               marginTop: 14,
             }}
-          />
+          >
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              step="0.01"
+              value={currentTime}
+              onMouseDown={handleProgressMouseDown}
+              onMouseUp={handleProgressMouseUp}
+              onTouchStart={handleProgressMouseDown}
+              onTouchEnd={handleProgressMouseUp}
+              onChange={handleProgressChange}
+              style={{
+                display: "block",
+                flex: 1,
+              }}
+            />
+
+            <button
+              onClick={toggleFullscreen}
+              title={
+                isFullscreen
+                  ? "خروج از حالت تمام صفحه"
+                  : "حالت تمام صفحه"
+              }
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 38,
+                height: 32,
+                flexShrink: 0,
+                border: `1px solid ${
+                  isFullscreen
+                    ? COLORS.yellow
+                    : COLORS.border
+                }`,
+                borderRadius: 7,
+                background: isFullscreen
+                  ? "rgba(242,201,76,.15)"
+                  : COLORS.card,
+                color: isFullscreen
+                  ? COLORS.yellow
+                  : COLORS.text,
+                cursor: "pointer",
+              }}
+            >
+              {isFullscreen ? (
+                <Minimize size={17} />
+              ) : (
+                <Maximize size={17} />
+              )}
+            </button>
+          </div>
 
           <div
             style={{
@@ -985,13 +1108,7 @@ export default function MoviePluss() {
               direction: "rtl",
             }}
           >
-            {/*
-              فقط شکل آیکون‌ها برعکس شده است.
-              عملکرد و جای دکمه‌ها بدون تغییر باقی مانده:
-              سمت راست = کارت قبلی
-              سمت چپ = کارت بعدی
-            */}
-
+            {/* سمت راست: کارت قبلی — فقط شکل فلش برعکس شده */}
             <IconButton
               onClick={previousSentence}
               title="کارت قبلی"
@@ -1011,6 +1128,7 @@ export default function MoviePluss() {
               )}
             </IconButton>
 
+            {/* سمت چپ: کارت بعدی — فقط شکل فلش برعکس شده */}
             <IconButton
               onClick={nextSentence}
               title="کارت بعدی"
