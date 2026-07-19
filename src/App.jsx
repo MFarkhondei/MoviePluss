@@ -20,8 +20,6 @@ import {
   RotateCcw,
   RotateCw,
   Settings,
-  SkipBack,
-  SkipForward,
   Subtitles,
   Volume1,
   Volume2,
@@ -128,7 +126,6 @@ function parseSubtitleText(raw = "") {
 function mergeSubtitles(englishText, persianText) {
   const english = parseSubtitleText(englishText);
   const persian = parseSubtitleText(persianText);
-
   const total = Math.max(english.length, persian.length);
 
   return Array.from({ length: total }, (_, index) => {
@@ -186,10 +183,8 @@ export default function MoviePluss() {
   const cuesRef = useRef([]);
   const currentCueRef = useRef(-1);
   const repeatRef = useRef(false);
-
-  const translationDragRef = useRef(null);
+  const dragRef = useRef(null);
   const translationCacheRef = useRef({});
-  const hideControlsTimerRef = useRef(null);
 
   const [videoUrl, setVideoUrl] = useState("");
   const [videoName, setVideoName] = useState("");
@@ -223,7 +218,6 @@ export default function MoviePluss() {
   const [filesOpen, setFilesOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [controlsVisible, setControlsVisible] = useState(true);
 
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
@@ -234,10 +228,6 @@ export default function MoviePluss() {
 
   const [wordPopup, setWordPopup] = useState(null);
 
-  /*
-    پنجره ترجمه ابتدا در بالا سمت راست فیلم قرار می‌گیرد.
-    چون داخل player قرار دارد، در حالت تمام‌صفحه نیز نمایش داده می‌شود.
-  */
   const [translationPosition, setTranslationPosition] =
     useState({
       top: 18,
@@ -267,7 +257,7 @@ export default function MoviePluss() {
   }, [playbackRate]);
 
   useEffect(() => {
-    const onFullscreenChange = () => {
+    const handleFullscreenChange = () => {
       setIsFullscreen(
         document.fullscreenElement === playerRef.current
       );
@@ -275,13 +265,13 @@ export default function MoviePluss() {
 
     document.addEventListener(
       "fullscreenchange",
-      onFullscreenChange
+      handleFullscreenChange
     );
 
     return () => {
       document.removeEventListener(
         "fullscreenchange",
-        onFullscreenChange
+        handleFullscreenChange
       );
     };
   }, []);
@@ -306,39 +296,20 @@ export default function MoviePluss() {
     };
   }, [videoUrl]);
 
-  const showControlsTemporarily = useCallback(() => {
-    setControlsVisible(true);
-    clearTimeout(hideControlsTimerRef.current);
-
-    if (isPlaying) {
-      hideControlsTimerRef.current = setTimeout(() => {
-        setControlsVisible(false);
-      }, 3500);
-    }
-  }, [isPlaying]);
-
-  useEffect(() => {
-    showControlsTemporarily();
-
-    return () => clearTimeout(hideControlsTimerRef.current);
-  }, [isPlaying, showControlsTemporarily]);
-
   const playVideo = useCallback(async () => {
     if (!videoRef.current) return;
 
     try {
       await videoRef.current.play();
       setIsPlaying(true);
-      showControlsTemporarily();
     } catch {
       setIsPlaying(false);
     }
-  }, [showControlsTemporarily]);
+  }, []);
 
   const pauseVideo = useCallback(() => {
     videoRef.current?.pause();
     setIsPlaying(false);
-    setControlsVisible(true);
   }, []);
 
   const togglePlay = useCallback(() => {
@@ -365,16 +336,14 @@ export default function MoviePluss() {
 
       videoRef.current.currentTime = nextTime;
       setCurrentTime(nextTime);
-      showControlsTemporarily();
     },
-    [duration, showControlsTemporarily]
+    [duration]
   );
 
   const seekTo = (value) => {
     if (!videoRef.current) return;
 
     const nextTime = Number(value);
-
     videoRef.current.currentTime = nextTime;
     setCurrentTime(nextTime);
   };
@@ -399,9 +368,8 @@ export default function MoviePluss() {
   );
 
   /*
-    کارت‌ها از سمت چپ شروع می‌شوند.
-    دکمه «کارت قبلی» در سمت راست قرار دارد.
-    دکمه «کارت بعدی» در سمت چپ قرار دارد.
+    دکمه سمت راست = کارت قبلی
+    دکمه سمت چپ = کارت بعدی
   */
   const goToPreviousCard = useCallback(() => {
     const previousIndex = currentCueRef.current - 1;
@@ -422,12 +390,6 @@ export default function MoviePluss() {
     }
   }, [jumpToCue]);
 
-  const replayCurrentCard = useCallback(() => {
-    if (currentCueRef.current >= 0) {
-      jumpToCue(currentCueRef.current, true);
-    }
-  }, [jumpToCue]);
-
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
 
@@ -437,10 +399,6 @@ export default function MoviePluss() {
     const list = cuesRef.current;
     const index = currentCueRef.current;
 
-    /*
-      در حالت تکرار، پخش از ابتدای کارت جاری شروع می‌شود
-      و تا ابتدای کارت بعدی ادامه پیدا می‌کند.
-    */
     if (repeatRef.current && index >= 0 && list[index]) {
       const current = list[index];
       const next = list[index + 1];
@@ -671,7 +629,7 @@ export default function MoviePluss() {
     const popupRect =
       translationRef.current.getBoundingClientRect();
 
-    translationDragRef.current = {
+    dragRef.current = {
       active: true,
       offsetX: event.clientX - popupRect.left,
       offsetY: event.clientY - popupRect.top,
@@ -681,7 +639,7 @@ export default function MoviePluss() {
   const handleTranslationPointerMove = useCallback(
     (event) => {
       if (
-        !translationDragRef.current?.active ||
+        !dragRef.current?.active ||
         !translationRef.current ||
         !playerRef.current
       ) {
@@ -697,12 +655,12 @@ export default function MoviePluss() {
       let left =
         event.clientX -
         playerRect.left -
-        translationDragRef.current.offsetX;
+        dragRef.current.offsetX;
 
       let top =
         event.clientY -
         playerRect.top -
-        translationDragRef.current.offsetY;
+        dragRef.current.offsetY;
 
       left = Math.max(
         8,
@@ -730,8 +688,8 @@ export default function MoviePluss() {
   );
 
   const handleTranslationPointerUp = useCallback(() => {
-    if (translationDragRef.current) {
-      translationDragRef.current.active = false;
+    if (dragRef.current) {
+      dragRef.current.active = false;
     }
   }, []);
 
@@ -779,6 +737,10 @@ export default function MoviePluss() {
         togglePlay();
       }
 
+      /*
+        کلید چپ: کارت بعدی
+        کلید راست: کارت قبلی
+      */
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         goToNextCard();
@@ -809,8 +771,6 @@ export default function MoviePluss() {
           ];
         });
       }
-
-      showControlsTemporarily();
     };
 
     window.addEventListener("keydown", handleKeyboard);
@@ -822,7 +782,6 @@ export default function MoviePluss() {
     goToNextCard,
     goToPreviousCard,
     seekBy,
-    showControlsTemporarily,
     toggleFullscreen,
     toggleMute,
     togglePlay,
@@ -884,15 +843,6 @@ export default function MoviePluss() {
           max-height: 100vh;
         }
 
-        .player-controls {
-          transition: opacity .2s ease;
-        }
-
-        .player-controls.hidden {
-          opacity: 0;
-          pointer-events: none;
-        }
-
         .subtitle-card:hover {
           border-color: ${COLORS.yellow} !important;
         }
@@ -912,6 +862,55 @@ export default function MoviePluss() {
 
         .translation-handle:active {
           cursor: grabbing;
+        }
+
+        .bottom-controls {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          width: 100%;
+          margin-top: 14px;
+          padding: 14px;
+          border: 1px solid ${COLORS.border};
+          border-radius: 14px;
+          background: ${COLORS.panel};
+        }
+
+        .main-control-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          width: 100%;
+          direction: ltr;
+        }
+
+        .card-control-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          width: 100%;
+          direction: rtl;
+        }
+
+        @media (max-width: 700px) {
+          .bottom-controls {
+            padding: 10px;
+          }
+
+          .time-label {
+            width: 100%;
+            text-align: center;
+          }
+
+          .volume-range {
+            width: 75px !important;
+          }
         }
       `}</style>
 
@@ -1045,7 +1044,6 @@ export default function MoviePluss() {
         <div
           ref={playerRef}
           className="movie-player"
-          onMouseMove={showControlsTemporarily}
           style={{
             position: "relative",
             overflow: "hidden",
@@ -1260,258 +1258,6 @@ export default function MoviePluss() {
                   )}
                 </div>
               )}
-
-              <div
-                className={`player-controls ${
-                  controlsVisible ? "" : "hidden"
-                }`}
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  bottom: 0,
-                  left: 0,
-                  padding: "45px 14px 12px",
-                  background:
-                    "linear-gradient(transparent, rgba(0,0,0,.9))",
-                }}
-                onClick={(event) =>
-                  event.stopPropagation()
-                }
-              >
-                <input
-                  type="range"
-                  min="0"
-                  max={duration || 0}
-                  step="0.01"
-                  value={currentTime}
-                  onChange={(event) =>
-                    seekTo(event.target.value)
-                  }
-                  style={{
-                    direction: "ltr",
-                    accentColor: COLORS.yellow,
-                  }}
-                />
-
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginTop: 8,
-                    direction: "ltr",
-                  }}
-                >
-                  <ControlButton onClick={togglePlay}>
-                    {isPlaying ? (
-                      <Pause size={20} />
-                    ) : (
-                      <Play size={20} />
-                    )}
-                  </ControlButton>
-
-                  <ControlButton onClick={() => seekBy(-10)}>
-                    <RotateCcw size={18} />
-                  </ControlButton>
-
-                  <ControlButton onClick={() => seekBy(10)}>
-                    <RotateCw size={18} />
-                  </ControlButton>
-
-                  <ControlButton onClick={toggleMute}>
-                    {isMuted || volume === 0 ? (
-                      <VolumeX size={18} />
-                    ) : volume < 0.5 ? (
-                      <Volume1 size={18} />
-                    ) : (
-                      <Volume2 size={18} />
-                    )}
-                  </ControlButton>
-
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={isMuted ? 0 : volume}
-                    onChange={(event) =>
-                      changeVolume(event.target.value)
-                    }
-                    style={{
-                      width: 90,
-                      accentColor: COLORS.yellow,
-                    }}
-                  />
-
-                  <span
-                    style={{
-                      minWidth: 108,
-                      color: COLORS.text,
-                      fontSize: 11,
-                      direction: "ltr",
-                    }}
-                  >
-                    {formatTime(currentTime)} /{" "}
-                    {formatTime(duration)}
-                  </span>
-
-                  <div style={{ flex: 1 }} />
-
-                  <select
-                    value={playbackRate}
-                    onChange={(event) =>
-                      setPlaybackRate(
-                        Number(event.target.value)
-                      )
-                    }
-                    style={selectStyle()}
-                    title="سرعت پخش"
-                  >
-                    {SPEEDS.map((speed) => (
-                      <option
-                        key={speed}
-                        value={speed}
-                        style={{
-                          background: COLORS.card,
-                        }}
-                      >
-                        {speed}x
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* تکرار جمله کنار کنترل سرعت */}
-                  <button
-                    onClick={() =>
-                      setRepeatOn((value) => !value)
-                    }
-                    title="فعال یا غیرفعال کردن تکرار جمله"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                      height: 32,
-                      padding: "0 10px",
-                      border: `1px solid ${
-                        repeatOn
-                          ? COLORS.yellow
-                          : COLORS.border
-                      }`,
-                      borderRadius: 7,
-                      background: repeatOn
-                        ? "rgba(242,201,76,.18)"
-                        : "rgba(0,0,0,.3)",
-                      color: repeatOn
-                        ? COLORS.yellow
-                        : COLORS.text,
-                      fontSize: 11,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <RotateCw size={15} />
-                    تکرار
-                  </button>
-
-                  <ControlButton
-                    active={showEnglish}
-                    onClick={() =>
-                      setShowEnglish((value) => !value)
-                    }
-                  >
-                    <Subtitles size={18} />
-                  </ControlButton>
-
-                  <ControlButton
-                    active={settingsOpen}
-                    onClick={() =>
-                      setSettingsOpen((value) => !value)
-                    }
-                  >
-                    <Settings size={18} />
-                  </ControlButton>
-
-                  <ControlButton onClick={toggleFullscreen}>
-                    {isFullscreen ? (
-                      <Minimize size={18} />
-                    ) : (
-                      <Maximize size={18} />
-                    )}
-                  </ControlButton>
-                </div>
-              </div>
-
-              {settingsOpen && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 14,
-                    left: 14,
-                    zIndex: 90,
-                    width: 260,
-                    padding: 14,
-                    border: `1px solid ${COLORS.border}`,
-                    borderRadius: 10,
-                    background: "rgba(20,23,31,.97)",
-                  }}
-                  onClick={(event) =>
-                    event.stopPropagation()
-                  }
-                >
-                  <SettingRange
-                    label="روشنایی"
-                    value={brightness}
-                    min={50}
-                    max={150}
-                    onChange={setBrightness}
-                  />
-
-                  <SettingRange
-                    label="کنتراست"
-                    value={contrast}
-                    min={50}
-                    max={150}
-                    onChange={setContrast}
-                  />
-
-                  <SettingRange
-                    label="اندازه زیرنویس"
-                    value={subtitleSize}
-                    min={60}
-                    max={180}
-                    onChange={setSubtitleSize}
-                  />
-
-                  <SettingRange
-                    label="موقعیت زیرنویس"
-                    value={subtitleBottom}
-                    min={5}
-                    max={180}
-                    onChange={setSubtitleBottom}
-                  />
-
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginTop: 10,
-                      color: COLORS.text,
-                      fontSize: 12,
-                    }}
-                  >
-                    پس‌زمینه زیرنویس
-                    <input
-                      type="checkbox"
-                      checked={subtitleBackground}
-                      onChange={(event) =>
-                        setSubtitleBackground(
-                          event.target.checked
-                        )
-                      }
-                    />
-                  </label>
-                </div>
-              )}
             </>
           )}
         </div>
@@ -1519,116 +1265,293 @@ export default function MoviePluss() {
         {videoUrl && (
           <>
             {/*
-              تمام دکمه‌های مربوط به کارت‌ها و زیرنویس‌ها
-              به زیر کادر فیلم منتقل شده‌اند.
-              
-              ترتیب از راست به چپ:
-              قبلی، تکرار، پخش، بعدی، ترجمه انگلیسی، ترجمه فارسی
+              تمام دکمه‌ها در این بخش، یعنی زیر نمایشگر فیلم قرار دارند.
+              هیچ دکمه کنترلی در بالای کادر فیلم وجود ندارد.
             */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 9,
-                flexWrap: "wrap",
-                marginTop: 16,
-                direction: "rtl",
-              }}
-            >
-              {/* سمت راست: کارت قبلی */}
-              <RoundButton
-                title="کارت قبلی"
-                onClick={goToPreviousCard}
-              >
-                <ChevronRight size={20} />
-              </RoundButton>
+            <section className="bottom-controls">
+              <div className="main-control-row">
+                <ControlButton onClick={togglePlay}>
+                  {isPlaying ? (
+                    <Pause size={20} />
+                  ) : (
+                    <Play size={20} />
+                  )}
+                </ControlButton>
 
-              <button
-                onClick={replayCurrentCard}
-                title="شروع مجدد کارت"
-                style={pillButtonStyle()}
-              >
-                <RotateCcw size={16} />
-                شروع مجدد
-              </button>
+                <ControlButton onClick={() => seekBy(-10)}>
+                  <RotateCcw size={18} />
+                </ControlButton>
 
-              <button
-                onClick={() =>
-                  setRepeatOn((value) => !value)
+                <ControlButton onClick={() => seekBy(10)}>
+                  <RotateCw size={18} />
+                </ControlButton>
+
+                <ControlButton onClick={toggleMute}>
+                  {isMuted || volume === 0 ? (
+                    <VolumeX size={18} />
+                  ) : volume < 0.5 ? (
+                    <Volume1 size={18} />
+                  ) : (
+                    <Volume2 size={18} />
+                  )}
+                </ControlButton>
+
+                <input
+                  className="volume-range"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={isMuted ? 0 : volume}
+                  onChange={(event) =>
+                    changeVolume(event.target.value)
+                  }
+                  style={{
+                    width: 95,
+                    accentColor: COLORS.yellow,
+                  }}
+                />
+
+                <span
+                  className="time-label"
+                  style={{
+                    minWidth: 110,
+                    color: COLORS.text,
+                    fontSize: 11,
+                    direction: "ltr",
+                  }}
+                >
+                  {formatTime(currentTime)} /{" "}
+                  {formatTime(duration)}
+                </span>
+
+                <select
+                  value={playbackRate}
+                  onChange={(event) =>
+                    setPlaybackRate(
+                      Number(event.target.value)
+                    )
+                  }
+                  style={selectStyle()}
+                  title="سرعت پخش"
+                >
+                  {SPEEDS.map((speed) => (
+                    <option
+                      key={speed}
+                      value={speed}
+                      style={{
+                        background: COLORS.card,
+                      }}
+                    >
+                      {speed}x
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={() =>
+                    setRepeatOn((value) => !value)
+                  }
+                  title="فعال یا غیرفعال کردن تکرار جمله"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    height: 32,
+                    padding: "0 10px",
+                    border: `1px solid ${
+                      repeatOn
+                        ? COLORS.yellow
+                        : COLORS.border
+                    }`,
+                    borderRadius: 7,
+                    background: repeatOn
+                      ? "rgba(242,201,76,.18)"
+                      : "rgba(0,0,0,.3)",
+                    color: repeatOn
+                      ? COLORS.yellow
+                      : COLORS.text,
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  <RotateCw size={15} />
+                  تکرار
+                </button>
+
+                <ControlButton
+                  active={settingsOpen}
+                  onClick={() =>
+                    setSettingsOpen((value) => !value)
+                  }
+                >
+                  <Settings size={18} />
+                </ControlButton>
+
+                <ControlButton onClick={toggleFullscreen}>
+                  {isFullscreen ? (
+                    <Minimize size={18} />
+                  ) : (
+                    <Maximize size={18} />
+                  )}
+                </ControlButton>
+              </div>
+
+              <input
+                type="range"
+                min="0"
+                max={duration || 0}
+                step="0.01"
+                value={currentTime}
+                onChange={(event) =>
+                  seekTo(event.target.value)
                 }
-                title="فعال یا غیرفعال کردن تکرار جمله"
                 style={{
-                  ...pillButtonStyle(),
-                  color: repeatOn
-                    ? COLORS.yellow
-                    : COLORS.muted,
-                  borderColor: repeatOn
-                    ? COLORS.yellow
-                    : COLORS.border,
+                  width: "100%",
+                  direction: "ltr",
+                  accentColor: COLORS.yellow,
+                }}
+              />
+
+              {/*
+                سمت راست: دکمه کارت قبلی
+                سمت چپ: دکمه کارت بعدی
+                دکمه شروع مجدد در این نسخه کاملاً حذف شده است.
+              */}
+              <div className="card-control-row">
+                <RoundButton
+                  title="کارت قبلی"
+                  onClick={goToPreviousCard}
+                >
+                  <ChevronRight size={21} />
+                </RoundButton>
+
+                <button
+                  onClick={() =>
+                    setShowEnglish((value) => !value)
+                  }
+                  style={{
+                    ...pillButtonStyle(),
+                    color: showEnglish
+                      ? COLORS.yellow
+                      : COLORS.muted,
+                    borderColor: showEnglish
+                      ? COLORS.yellow
+                      : COLORS.border,
+                  }}
+                >
+                  <Subtitles size={16} />
+                  ترجمه انگلیسی
+                </button>
+
+                <button
+                  onClick={() =>
+                    setShowPersian((value) => !value)
+                  }
+                  style={{
+                    ...pillButtonStyle(),
+                    color: showPersian
+                      ? COLORS.teal
+                      : COLORS.muted,
+                    borderColor: showPersian
+                      ? COLORS.teal
+                      : COLORS.border,
+                  }}
+                >
+                  <Subtitles size={16} />
+                  ترجمه فارسی
+                </button>
+
+                <RoundButton
+                  title="پخش / توقف"
+                  large
+                  onClick={togglePlay}
+                >
+                  {isPlaying ? (
+                    <CirclePause size={28} />
+                  ) : (
+                    <CirclePlay size={28} />
+                  )}
+                </RoundButton>
+
+                <RoundButton
+                  title="کارت بعدی"
+                  onClick={goToNextCard}
+                >
+                  <ChevronLeft size={21} />
+                </RoundButton>
+              </div>
+            </section>
+
+            {settingsOpen && (
+              <section
+                style={{
+                  width: "100%",
+                  maxWidth: 360,
+                  marginTop: 12,
+                  marginRight: "auto",
+                  marginLeft: "auto",
+                  padding: 15,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: 12,
+                  background: COLORS.panel,
                 }}
               >
-                <RotateCw size={16} />
-                تکرار جمله
-              </button>
+                <SettingRange
+                  label="روشنایی"
+                  value={brightness}
+                  min={50}
+                  max={150}
+                  onChange={setBrightness}
+                />
 
-              <RoundButton
-                title="پخش / توقف"
-                large
-                onClick={togglePlay}
-              >
-                {isPlaying ? (
-                  <CirclePause size={28} />
-                ) : (
-                  <CirclePlay size={28} />
-                )}
-              </RoundButton>
+                <SettingRange
+                  label="کنتراست"
+                  value={contrast}
+                  min={50}
+                  max={150}
+                  onChange={setContrast}
+                />
 
-              {/* سمت چپ: کارت بعدی */}
-              <RoundButton
-                title="کارت بعدی"
-                onClick={goToNextCard}
-              >
-                <ChevronLeft size={20} />
-              </RoundButton>
+                <SettingRange
+                  label="اندازه زیرنویس"
+                  value={subtitleSize}
+                  min={60}
+                  max={180}
+                  onChange={setSubtitleSize}
+                />
 
-              {/* ترجمه انگلیسی و فارسی کنار هم */}
-              <button
-                onClick={() =>
-                  setShowEnglish((value) => !value)
-                }
-                style={{
-                  ...pillButtonStyle(),
-                  color: showEnglish
-                    ? COLORS.yellow
-                    : COLORS.muted,
-                  borderColor: showEnglish
-                    ? COLORS.yellow
-                    : COLORS.border,
-                }}
-              >
-                <Subtitles size={16} />
-                ترجمه انگلیسی
-              </button>
+                <SettingRange
+                  label="موقعیت زیرنویس"
+                  value={subtitleBottom}
+                  min={5}
+                  max={180}
+                  onChange={setSubtitleBottom}
+                />
 
-              <button
-                onClick={() =>
-                  setShowPersian((value) => !value)
-                }
-                style={{
-                  ...pillButtonStyle(),
-                  color: showPersian
-                    ? COLORS.teal
-                    : COLORS.muted,
-                  borderColor: showPersian
-                    ? COLORS.teal
-                    : COLORS.border,
-                }}
-              >
-                <Subtitles size={16} />
-                ترجمه فارسی
-              </button>
-            </div>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginTop: 10,
+                    color: COLORS.text,
+                    fontSize: 12,
+                  }}
+                >
+                  پس‌زمینه زیرنویس
+                  <input
+                    type="checkbox"
+                    checked={subtitleBackground}
+                    onChange={(event) =>
+                      setSubtitleBackground(
+                        event.target.checked
+                      )
+                    }
+                  />
+                </label>
+              </section>
+            )}
 
             {cues.length > 0 && (
               <section style={{ marginTop: 25 }}>
@@ -1643,6 +1566,7 @@ export default function MoviePluss() {
                   }}
                 >
                   <span>کارت‌ها ({cues.length})</span>
+
                   <span>
                     کارت{" "}
                     {currentCue >= 0 ? currentCue + 1 : "-"}
@@ -1650,9 +1574,8 @@ export default function MoviePluss() {
                 </div>
 
                 {/*
-                  مهم:
-                  direction: ltr باعث می‌شود کارت‌ها از سمت چپ
-                  شروع شوند و کارت اول در سمت چپ قرار بگیرد.
+                  کارت‌ها از سمت چپ شروع می‌شوند.
+                  کارت اول در سمت چپ قرار می‌گیرد.
                 */}
                 <div
                   ref={cardsRef}
@@ -1890,16 +1813,16 @@ function ControlButton({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 34,
-        height: 32,
+        width: 36,
+        height: 34,
         padding: 0,
         border: `1px solid ${
-          active ? COLORS.yellow : "transparent"
+          active ? COLORS.yellow : COLORS.border
         }`,
         borderRadius: 7,
         background: active
           ? "rgba(242,201,76,.18)"
-          : "rgba(0,0,0,.3)",
+          : COLORS.card,
         color: active ? COLORS.yellow : COLORS.text,
         cursor: "pointer",
       }}
@@ -1923,8 +1846,8 @@ function RoundButton({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        width: large ? 56 : 43,
-        height: large ? 56 : 43,
+        width: large ? 58 : 44,
+        height: large ? 58 : 44,
         padding: 0,
         border: `1px solid ${COLORS.border}`,
         borderRadius: "50%",
@@ -1971,7 +1894,7 @@ function uploadBoxStyle() {
 function selectStyle(full = false) {
   return {
     width: full ? "100%" : "auto",
-    minHeight: 32,
+    minHeight: 34,
     padding: "3px 7px",
     border: `1px solid ${COLORS.border}`,
     borderRadius: 6,
