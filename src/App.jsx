@@ -74,8 +74,8 @@ function parseSubtitleText(raw = "") {
 
       if (timeIndex === -1) return null;
 
-      const timeLine = lines[timeIndex];
-      const [startValue, endValue] = timeLine.split("-->");
+      const [startValue, endValue] =
+        lines[timeIndex].split("-->");
 
       const start = timeToSeconds(startValue);
       const end = timeToSeconds(
@@ -103,25 +103,22 @@ function parseSubtitleText(raw = "") {
 }
 
 function mergeSubtitles(englishText, persianText) {
-  const englishCues = parseSubtitleText(englishText);
-  const persianCues = parseSubtitleText(persianText);
+  const english = parseSubtitleText(englishText);
+  const persian = parseSubtitleText(persianText);
 
-  const count = Math.max(
-    englishCues.length,
-    persianCues.length
-  );
+  const count = Math.max(english.length, persian.length);
 
   return Array.from({ length: count }, (_, index) => {
-    const englishCue = englishCues[index];
-    const persianCue = persianCues[index];
-    const baseCue = englishCue || persianCue;
+    const en = english[index];
+    const fa = persian[index];
+    const base = en || fa;
 
     return {
       index: index + 1,
-      start: baseCue?.start || 0,
-      end: baseCue?.end || 0,
-      en: englishCue?.text || "",
-      fa: persianCue?.text || "",
+      start: base?.start || 0,
+      end: base?.end || 0,
+      en: en?.text || "",
+      fa: fa?.text || "",
     };
   });
 }
@@ -153,10 +150,7 @@ async function decodeFile(file, encoding) {
 async function autoDecodeFile(file) {
   const buffer = await file.arrayBuffer();
 
-  const utf8Text = new TextDecoder("utf-8", {
-    fatal: false,
-  }).decode(buffer);
-
+  const utf8Text = new TextDecoder("utf-8").decode(buffer);
   const replacementCount = (
     utf8Text.match(/\uFFFD/g) || []
   ).length;
@@ -231,6 +225,12 @@ export default function MoviePluss() {
   }, [repeatOn]);
 
   useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate]);
+
+  useEffect(() => {
     return () => {
       if (videoUrl) {
         URL.revokeObjectURL(videoUrl);
@@ -239,25 +239,17 @@ export default function MoviePluss() {
   }, [videoUrl]);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.playbackRate = playbackRate;
-    }
-  }, [playbackRate, videoUrl]);
-
-  useEffect(() => {
     if (currentIndex < 0 || !cardsRef.current) return;
 
     const activeCard = cardsRef.current.querySelector(
       `[data-frame="${currentIndex}"]`
     );
 
-    if (activeCard) {
-      activeCard.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-        inline: "center",
-      });
-    }
+    activeCard?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
   }, [currentIndex]);
 
   const playVideo = useCallback(async () => {
@@ -286,7 +278,7 @@ export default function MoviePluss() {
     } else {
       pauseVideo();
     }
-  }, [pauseVideo, playVideo]);
+  }, [playVideo, pauseVideo]);
 
   const jumpToCue = useCallback(
     (index, autoplay = true) => {
@@ -308,6 +300,9 @@ export default function MoviePluss() {
     []
   );
 
+  /*
+   * دکمه سمت چپ: کارت بعدی
+   */
   const nextSentence = useCallback(() => {
     const nextIndex = currentIndexRef.current + 1;
 
@@ -316,6 +311,9 @@ export default function MoviePluss() {
     }
   }, [jumpToCue]);
 
+  /*
+   * دکمه سمت راست: کارت قبلی
+   */
   const previousSentence = useCallback(() => {
     const previousIndex = currentIndexRef.current - 1;
 
@@ -353,15 +351,13 @@ export default function MoviePluss() {
       const currentCue = list[lockedIndex];
       const nextCue = list[lockedIndex + 1];
 
-      const repeatBoundary = nextCue
+      const boundary = nextCue
         ? nextCue.start
         : currentCue.end;
 
-      if (time >= repeatBoundary - 0.04) {
-        const shouldPlay = !video.paused;
-
+      if (time >= boundary - 0.04) {
         seekingRef.current = true;
-        playAfterSeekRef.current = shouldPlay;
+        playAfterSeekRef.current = !video.paused;
         video.currentTime = currentCue.start;
       }
 
@@ -382,9 +378,7 @@ export default function MoviePluss() {
   };
 
   const handleSeeked = () => {
-    if (!videoRef.current || !seekingRef.current) {
-      return;
-    }
+    if (!seekingRef.current) return;
 
     seekingRef.current = false;
 
@@ -438,34 +432,28 @@ export default function MoviePluss() {
       setEnglishEncoding(encoding);
 
       if (englishFile) {
-        const decodedText = await decodeFile(
-          englishFile,
-          encoding
+        setEnglishText(
+          await decodeFile(englishFile, encoding)
         );
-
-        setEnglishText(decodedText);
       }
     } else {
       setPersianEncoding(encoding);
 
       if (persianFile) {
-        const decodedText = await decodeFile(
-          persianFile,
-          encoding
+        setPersianText(
+          await decodeFile(persianFile, encoding)
         );
-
-        setPersianText(decodedText);
       }
     }
   };
 
   const applySubtitles = () => {
-    const mergedCues = mergeSubtitles(
+    const merged = mergeSubtitles(
       englishText,
       persianText
     );
 
-    setCues(mergedCues);
+    setCues(merged);
     setCurrentIndex(-1);
     currentIndexRef.current = -1;
   };
@@ -501,12 +489,12 @@ export default function MoviePluss() {
 
     if (!word) return;
 
-    const cacheKey = word.toLowerCase();
+    const key = word.toLowerCase();
 
-    if (translationCacheRef.current[cacheKey]) {
+    if (translationCacheRef.current[key]) {
       setWordPopup({
         word,
-        translation: translationCacheRef.current[cacheKey],
+        translation: translationCacheRef.current[key],
         loading: false,
       });
 
@@ -532,7 +520,7 @@ export default function MoviePluss() {
         data?.responseData?.translatedText ||
         "ترجمه پیدا نشد";
 
-      translationCacheRef.current[cacheKey] = translation;
+      translationCacheRef.current[key] = translation;
 
       setWordPopup({
         word,
@@ -548,15 +536,13 @@ export default function MoviePluss() {
     }
   };
 
-  const renderEnglish = (text, keyPrefix) => {
+  const renderEnglish = (text, prefix) => {
     return text.split(/(\s+)/).map((token, index) => {
-      if (/^\s+$/.test(token)) {
-        return token;
-      }
+      if (/^\s+$/.test(token)) return token;
 
       return (
         <span
-          key={`${keyPrefix}-${index}`}
+          key={`${prefix}-${index}`}
           onClick={(event) => {
             event.stopPropagation();
             translateWord(token);
@@ -574,12 +560,12 @@ export default function MoviePluss() {
 
   useEffect(() => {
     const handleKeyboard = (event) => {
-      const activeTag = document.activeElement?.tagName;
+      const tag = document.activeElement?.tagName;
 
       if (
-        activeTag === "INPUT" ||
-        activeTag === "TEXTAREA" ||
-        activeTag === "SELECT"
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT"
       ) {
         return;
       }
@@ -591,12 +577,12 @@ export default function MoviePluss() {
 
       if (event.code === "ArrowLeft") {
         event.preventDefault();
-        previousSentence();
+        nextSentence();
       }
 
       if (event.code === "ArrowRight") {
         event.preventDefault();
-        nextSentence();
+        previousSentence();
       }
 
       if (event.code === "KeyR") {
@@ -611,10 +597,10 @@ export default function MoviePluss() {
       window.removeEventListener("keydown", handleKeyboard);
     };
   }, [
+    togglePlay,
     nextSentence,
     previousSentence,
     replaySentence,
-    togglePlay,
   ]);
 
   const activeCue =
@@ -763,19 +749,17 @@ export default function MoviePluss() {
             borderBottom: `1px solid ${COLORS.border}`,
           }}
         >
-          <div>
-            <label style={uploadLabelStyle()}>
-              <Upload size={15} color={COLORS.yellow} />
-              {videoName || "انتخاب فایل ویدیو"}
+          <label style={uploadLabelStyle()}>
+            <Upload size={15} color={COLORS.yellow} />
+            {videoName || "انتخاب فایل ویدیو"}
 
-              <input
-                type="file"
-                accept="video/*"
-                onChange={handleVideoFile}
-                style={{ display: "none" }}
-              />
-            </label>
-          </div>
+            <input
+              type="file"
+              accept="video/*"
+              onChange={handleVideoFile}
+              style={{ display: "none" }}
+            />
+          </label>
 
           <SubtitleBox
             title="زیرنویس انگلیسی"
@@ -901,7 +885,6 @@ export default function MoviePluss() {
                   </div>
 
                   <div
-                    dir="rtl"
                     style={{
                       marginTop: 3,
                       color: COLORS.teal,
@@ -954,6 +937,7 @@ export default function MoviePluss() {
                       fontSize: 17,
                       fontWeight: 600,
                       textAlign: "center",
+                      direction: "ltr",
                     }}
                   >
                     {renderEnglish(activeCue.en, "overlay")}
@@ -962,7 +946,6 @@ export default function MoviePluss() {
 
                 {showPersian && activeCue.fa && (
                   <div
-                    dir="rtl"
                     style={{
                       maxWidth: "90%",
                       padding: "4px 12px",
@@ -1012,6 +995,11 @@ export default function MoviePluss() {
             <span>{formatTime(duration)}</span>
           </div>
 
+          {/*
+            direction: rtl باعث می‌شود:
+            - دکمه قبلی در سمت راست باشد
+            - دکمه بعدی در سمت چپ باشد
+          */}
           <div
             style={{
               display: "flex",
@@ -1020,12 +1008,13 @@ export default function MoviePluss() {
               gap: 10,
               flexWrap: "wrap",
               marginTop: 16,
-              direction: "ltr",
+              direction: "rtl",
             }}
           >
+            {/* سمت راست: کارت قبلی */}
             <IconButton
               onClick={previousSentence}
-              title="جمله قبلی"
+              title="کارت قبلی"
             >
               <SkipBack size={18} />
             </IconButton>
@@ -1042,16 +1031,17 @@ export default function MoviePluss() {
               )}
             </IconButton>
 
+            {/* سمت چپ: کارت بعدی */}
             <IconButton
               onClick={nextSentence}
-              title="جمله بعدی"
+              title="کارت بعدی"
             >
               <SkipForward size={18} />
             </IconButton>
 
             <IconButton
               onClick={replaySentence}
-              title="شروع مجدد جمله"
+              title="شروع مجدد کارت"
             >
               <RotateCcw size={18} />
             </IconButton>
@@ -1166,6 +1156,7 @@ export default function MoviePluss() {
                 کارت کلیک کنید
               </div>
 
+              {/* کارت‌ها از سمت راست به سمت چپ قرار می‌گیرند */}
               <div
                 ref={cardsRef}
                 style={{
@@ -1174,11 +1165,6 @@ export default function MoviePluss() {
                   gap: 10,
                   overflowX: "auto",
                   paddingBottom: 10,
-
-                  /*
-                   * کارت‌ها از سمت راست به چپ نمایش داده می‌شوند.
-                   * کارت اول در سمت راست قرار می‌گیرد.
-                   */
                   direction: "rtl",
                 }}
               >
@@ -1244,7 +1230,6 @@ export default function MoviePluss() {
 
                     {cue.fa && (
                       <div
-                        dir="rtl"
                         style={{
                           color: COLORS.teal,
                           fontSize: 12.5,
@@ -1342,9 +1327,7 @@ function SubtitleBox({
           <option
             key={item.value}
             value={item.value}
-            style={{
-              background: COLORS.card,
-            }}
+            style={{ background: COLORS.card }}
           >
             {item.label}
           </option>
