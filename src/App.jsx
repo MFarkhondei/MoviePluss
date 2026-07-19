@@ -226,7 +226,7 @@ export default function MoviePluss() {
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
   const [subtitleSize, setSubtitleSize] = useState(100);
-  const [subtitleBottom, setSubtitleBottom] = useState(70); // تغییر به 70
+  const [subtitleBottom, setSubtitleBottom] = useState(70);
   const [subtitleBackground, setSubtitleBackground] =
     useState(true);
 
@@ -282,13 +282,21 @@ export default function MoviePluss() {
 
   useEffect(() => {
     if (currentCue >= 0 && cardsRef.current) {
-      cardsRef.current
-        .querySelector(`[data-card="${currentCue}"]`)
-        ?.scrollIntoView({
+      const cardElement = cardsRef.current.querySelector(`[data-card="${currentCue}"]`);
+      if (cardElement) {
+        // اسکرول به گونه‌ای که کارت جاری در سمت راست نمایش داده شود
+        const container = cardsRef.current;
+        const cardRect = cardElement.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        
+        // محاسبه موقعیت اسکرول برای نمایش کارت در سمت راست
+        const scrollOffset = cardElement.offsetLeft + cardElement.offsetWidth - container.clientWidth;
+        
+        container.scrollTo({
+          left: scrollOffset + 20, // 20px فاصله از سمت راست
           behavior: "smooth",
-          block: "nearest",
-          inline: "nearest",
         });
+      }
     }
   }, [currentCue]);
 
@@ -310,6 +318,18 @@ export default function MoviePluss() {
       }, 3500);
     }
   }, [isPlaying]);
+
+  // وقتی ماوس وارد منطقه پلیر می‌شود، کنترل‌ها نمایش داده شوند
+  const handleMouseEnterPlayer = useCallback(() => {
+    setControlsVisible(true);
+    clearTimeout(hideControlsTimerRef.current);
+  }, []);
+
+  // وقتی ماوس از منطقه پلیر خارج می‌شود، کنترل‌ها بلافاصله مخفی شوند
+  const handleMouseLeavePlayer = useCallback(() => {
+    setControlsVisible(false);
+    clearTimeout(hideControlsTimerRef.current);
+  }, []);
 
   useEffect(() => {
     showControlsTemporarily();
@@ -776,13 +796,11 @@ export default function MoviePluss() {
         togglePlay();
       }
 
-      // کلید راست → کارت بعدی
       if (event.key === "ArrowRight") {
         event.preventDefault();
         goToNextCard();
       }
 
-      // کلید چپ → کارت قبلی
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         goToPreviousCard();
@@ -869,6 +887,14 @@ export default function MoviePluss() {
           background: ${COLORS.yellow};
         }
 
+        .movie-player {
+          position: relative;
+          overflow: hidden;
+          border: 1px solid ${COLORS.border};
+          border-radius: 14px;
+          background: #000;
+        }
+
         .movie-player:fullscreen {
           width: 100vw;
           height: 100vh;
@@ -883,8 +909,26 @@ export default function MoviePluss() {
           max-height: 100vh;
         }
 
+        .movie-player:fullscreen .player-controls {
+          padding: 60px 20px 20px;
+        }
+
+        .movie-player:fullscreen .player-controls input[type="range"] {
+          height: 8px;
+        }
+
+        .movie-player:fullscreen .player-controls button {
+          width: 44px;
+          height: 42px;
+        }
+
+        .movie-player:fullscreen .player-controls .time-display {
+          font-size: 14px;
+          min-width: 140px;
+        }
+
         .player-controls {
-          transition: opacity .2s ease;
+          transition: opacity 0.15s ease;
         }
 
         .player-controls.hidden {
@@ -911,6 +955,34 @@ export default function MoviePluss() {
 
         .translation-handle:active {
           cursor: grabbing;
+        }
+
+        .cards-container {
+          display: flex;
+          flex-direction: row;
+          gap: 10px;
+          overflow-x: auto;
+          padding-bottom: 10px;
+          direction: ltr;
+          scroll-behavior: smooth;
+        }
+
+        .cards-container::-webkit-scrollbar {
+          height: 6px;
+        }
+
+        .cards-container::-webkit-scrollbar-track {
+          background: ${COLORS.bg};
+          border-radius: 3px;
+        }
+
+        .cards-container::-webkit-scrollbar-thumb {
+          background: ${COLORS.border};
+          border-radius: 3px;
+        }
+
+        .cards-container::-webkit-scrollbar-thumb:hover {
+          background: ${COLORS.muted};
         }
       `}</style>
 
@@ -1044,14 +1116,11 @@ export default function MoviePluss() {
         <div
           ref={playerRef}
           className="movie-player"
+          onMouseEnter={handleMouseEnterPlayer}
+          onMouseLeave={handleMouseLeavePlayer}
           onMouseMove={showControlsTemporarily}
           style={{
-            position: "relative",
-            overflow: "hidden",
             minHeight: videoUrl ? 360 : 270,
-            border: `1px solid ${COLORS.border}`,
-            borderRadius: 14,
-            background: "#000",
           }}
         >
           {!videoUrl ? (
@@ -1081,11 +1150,6 @@ export default function MoviePluss() {
             </label>
           ) : (
             <>
-              {/*
-                کلیک چپ روی ویدیو → توقف/شروع پخش
-                کلیک راست روی ویدیو → کارت بعدی
-                دابل کلیک → تمام‌صفحه
-              */}
               <video
                 ref={videoRef}
                 src={videoUrl}
@@ -1318,11 +1382,6 @@ export default function MoviePluss() {
                     )}
                   </ControlButton>
 
-                  {/*
-                    دکمه‌های کارت قبلی/بعدی با فلش‌های جابجا شده:
-                    ChevronLeft = کارت قبلی
-                    ChevronRight = کارت بعدی
-                  */}
                   <ControlButton
                     onClick={goToPreviousCard}
                     title="کارت قبلی"
@@ -1370,6 +1429,7 @@ export default function MoviePluss() {
                   />
 
                   <span
+                    className="time-display"
                     style={{
                       minWidth: 108,
                       color: COLORS.text,
@@ -1576,14 +1636,7 @@ export default function MoviePluss() {
 
             <div
               ref={cardsRef}
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                gap: 10,
-                overflowX: "auto",
-                paddingBottom: 10,
-                direction: "ltr",
-              }}
+              className="cards-container"
             >
               {cues.map((cue, index) => (
                 <div
