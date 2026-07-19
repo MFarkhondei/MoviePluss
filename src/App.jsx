@@ -1,32 +1,32 @@
 import React, {
-  useState,
-  useRef,
-  useEffect,
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
+  useState,
 } from "react";
-import "vazirmatn/Vazirmatn-font-face.css";
 import {
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  Repeat,
-  Repeat1,
-  Upload,
-  Film,
-  Gauge,
-  RotateCcw,
-  X,
   ChevronDown,
   ChevronUp,
+  Film,
+  Gauge,
+  Pause,
+  Play,
+  Repeat,
+  Repeat1,
+  RotateCcw,
+  SkipBack,
+  SkipForward,
+  Upload,
+  X,
 } from "lucide-react";
+import "vazirmatn/Vazirmatn-font-face.css";
 
 const C = {
   bg: "#101219",
   panel: "#181B25",
   card: "#1F2330",
-  cardActive: "#2A2F42",
+  active: "#2A2F42",
   yellow: "#F2C94C",
   teal: "#4FD9C0",
   text: "#EDEAE3",
@@ -35,15 +35,14 @@ const C = {
 };
 
 const ENCODINGS = [
-  { value: "utf-8", label: "UTF-8 (پیش‌فرض)" },
+  { value: "utf-8", label: "UTF-8" },
   { value: "windows-1256", label: "Windows-1256" },
   { value: "iso-8859-6", label: "ISO-8859-6" },
   { value: "windows-1252", label: "Windows-1252" },
 ];
 
-function timeToSeconds(value) {
-  const normalized = value.trim().replace(",", ".");
-  const parts = normalized.split(":").map(Number);
+function timeToSeconds(value = "") {
+  const parts = value.trim().replace(",", ".").split(":").map(Number);
 
   if (parts.length === 3) {
     return parts[0] * 3600 + parts[1] * 60 + parts[2];
@@ -56,99 +55,84 @@ function timeToSeconds(value) {
   return Number(parts[0]) || 0;
 }
 
-function parseSubtitleText(raw) {
-  if (!raw || !raw.trim()) return [];
+function parseSubtitleText(raw = "") {
+  if (!raw.trim()) return [];
 
-  const text = raw
+  const content = raw
     .replace(/\r/g, "")
     .replace(/^WEBVTT.*\n+/i, "");
 
-  const blocks = text
+  return content
     .split(/\n\s*\n/)
     .map((block) => block.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((block) => {
+      const lines = block.split("\n");
+      const timeIndex = lines.findIndex((line) =>
+        line.includes("-->")
+      );
 
-  const cues = [];
+      if (timeIndex === -1) return null;
 
-  for (const block of blocks) {
-    const lines = block.split("\n");
-    const timeLineIndex = lines.findIndex((line) =>
-      line.includes("-->")
-    );
+      const [startValue, endValue] = lines[timeIndex].split("-->");
 
-    if (timeLineIndex === -1) continue;
+      const start = timeToSeconds(startValue);
+      const end = timeToSeconds(
+        endValue?.trim().split(/\s+/)[0]
+      );
 
-    const [startRaw, endRaw] =
-      lines[timeLineIndex].split("-->");
+      const text = lines
+        .slice(timeIndex + 1)
+        .join(" ")
+        .replace(/<[^>]+>/g, "")
+        .trim();
 
-    const start = timeToSeconds(startRaw);
-    const end = timeToSeconds(
-      (endRaw || "").trim().split(/\s+/)[0]
-    );
+      if (!text || Number.isNaN(start) || Number.isNaN(end)) {
+        return null;
+      }
 
-    const content = lines
-      .slice(timeLineIndex + 1)
-      .join(" ")
-      .replace(/<[^>]+>/g, "")
-      .trim();
-
-    if (!content || Number.isNaN(start) || Number.isNaN(end)) {
-      continue;
-    }
-
-    cues.push({
-      start,
-      end,
-      text: content,
-    });
-  }
-
-  return cues.sort((a, b) => a.start - b.start);
+      return { start, end, text };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start);
 }
 
-function mergeCues(enCues, faCues) {
-  const length = Math.max(enCues.length, faCues.length);
-  const result = [];
+function mergeSubtitles(enText, faText) {
+  const enCues = parseSubtitleText(enText);
+  const faCues = parseSubtitleText(faText);
+  const count = Math.max(enCues.length, faCues.length);
 
-  for (let i = 0; i < length; i++) {
-    const en = enCues[i];
-    const fa = faCues[i];
+  return Array.from({ length: count }, (_, index) => {
+    const en = enCues[index];
+    const fa = faCues[index];
     const base = en || fa;
 
-    if (!base) continue;
-
-    result.push({
-      index: i + 1,
+    return {
+      index: index + 1,
       start: base.start,
       end: base.end,
       en: en?.text || "",
       fa: fa?.text || "",
-    });
-  }
-
-  return result;
+    };
+  });
 }
 
-function formatTime(seconds) {
-  if (!Number.isFinite(seconds)) return "00:00";
+function formatTime(value = 0) {
+  if (!Number.isFinite(value)) return "00:00";
 
-  const minutes = Math.floor(seconds / 60);
-  const sec = Math.floor(seconds % 60);
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.floor(value % 60);
 
   return `${String(minutes).padStart(2, "0")}:${String(
-    sec
+    seconds
   ).padStart(2, "0")}`;
 }
 
 function decodeBuffer(buffer, encoding) {
   try {
-    return new TextDecoder(encoding, {
-      fatal: false,
-    }).decode(buffer);
+    return new TextDecoder(encoding).decode(buffer);
   } catch {
-    return new TextDecoder("utf-8", {
-      fatal: false,
-    }).decode(buffer);
+    return new TextDecoder("utf-8").decode(buffer);
   }
 }
 
@@ -157,7 +141,7 @@ async function decodeFile(file, encoding) {
   return decodeBuffer(buffer, encoding);
 }
 
-async function decodeAuto(file) {
+async function autoDecodeFile(file) {
   const buffer = await file.arrayBuffer();
 
   const utf8Text = new TextDecoder("utf-8", {
@@ -174,35 +158,6 @@ async function decodeAuto(file) {
     };
   }
 
-  const hasArabic =
-    /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(
-      utf8Text
-    );
-
-  if (!hasArabic && buffer.byteLength > 50) {
-    const hasHighBytes = Array.from(
-      new Uint8Array(buffer)
-    ).some((byte) => byte > 0x7f);
-
-    if (hasHighBytes) {
-      const windowsText = decodeBuffer(
-        buffer,
-        "windows-1256"
-      );
-
-      if (
-        /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(
-          windowsText
-        )
-      ) {
-        return {
-          text: windowsText,
-          encoding: "windows-1256",
-        };
-      }
-    }
-  }
-
   return {
     text: utf8Text,
     encoding: "utf-8",
@@ -210,38 +165,9 @@ async function decodeAuto(file) {
 }
 
 export default function MoviePluss() {
-  const [videoUrl, setVideoUrl] = useState(null);
-  const [videoName, setVideoName] = useState("");
-
-  const [enFile, setEnFile] = useState(null);
-  const [faFile, setFaFile] = useState(null);
-
-  const [enEncoding, setEnEncoding] = useState("utf-8");
-  const [faEncoding, setFaEncoding] = useState("utf-8");
-
-  const [enText, setEnText] = useState("");
-  const [faText, setFaText] = useState("");
-
-  const [cues, setCues] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(-1);
-
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [repeatOn, setRepeatOn] = useState(true);
-  const [rate, setRate] = useState(1);
-
-  const [duration, setDuration] = useState(0);
-  const [current, setCurrent] = useState(0);
-
-  const [panelOpen, setPanelOpen] = useState(true);
-  const [showEn, setShowEn] = useState(true);
-  const [showFa, setShowFa] = useState(true);
-
-  const [wordPopup, setWordPopup] = useState(null);
-
   const videoRef = useRef(null);
   const stripRef = useRef(null);
 
-  const translationCache = useRef({});
   const cuesRef = useRef([]);
   const currentIndexRef = useRef(-1);
   const repeatRef = useRef(true);
@@ -249,6 +175,36 @@ export default function MoviePluss() {
   const seekingRef = useRef(false);
   const userSeekingRef = useRef(false);
   const playAfterSeekRef = useRef(false);
+
+  const translationCache = useRef({});
+
+  const [videoUrl, setVideoUrl] = useState(null);
+  const [videoName, setVideoName] = useState("");
+
+  const [enFile, setEnFile] = useState(null);
+  const [faFile, setFaFile] = useState(null);
+
+  const [enText, setEnText] = useState("");
+  const [faText, setFaText] = useState("");
+
+  const [enEncoding, setEnEncoding] = useState("utf-8");
+  const [faEncoding, setFaEncoding] = useState("utf-8");
+
+  const [cues, setCues] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [repeatOn, setRepeatOn] = useState(true);
+  const [playbackRate, setPlaybackRate] = useState(1);
+
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [showEnglish, setShowEnglish] = useState(true);
+  const [showPersian, setShowPersian] = useState(true);
+
+  const [wordPopup, setWordPopup] = useState(null);
 
   useEffect(() => {
     cuesRef.current = cues;
@@ -262,50 +218,188 @@ export default function MoviePluss() {
     repeatRef.current = repeatOn;
   }, [repeatOn]);
 
-  const enCueCount = useMemo(
-    () => parseSubtitleText(enText).length,
-    [enText]
-  );
-
-  const faCueCount = useMemo(
-    () => parseSubtitleText(faText).length,
-    [faText]
-  );
-
   useEffect(() => {
     return () => {
-      if (videoUrl) {
-        URL.revokeObjectURL(videoUrl);
-      }
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
     };
   }, [videoUrl]);
 
-  const onVideoFile = (event) => {
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate, videoUrl]);
+
+  useEffect(() => {
+    if (currentIndex === -1 || !stripRef.current) return;
+
+    const activeCard = stripRef.current.querySelector(
+      `[data-frame="${currentIndex}"]`
+    );
+
+    activeCard?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [currentIndex]);
+
+  const playVideo = async () => {
+    if (!videoRef.current) return;
+
+    try {
+      await videoRef.current.play();
+      setIsPlaying(true);
+    } catch {
+      setIsPlaying(false);
+    }
+  };
+
+  const pauseVideo = () => {
+    if (!videoRef.current) return;
+
+    videoRef.current.pause();
+    setIsPlaying(false);
+  };
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+
+    if (videoRef.current.paused) {
+      playVideo();
+    } else {
+      pauseVideo();
+    }
+  };
+
+  const jumpToCue = useCallback((index, autoplay = true) => {
+    const video = videoRef.current;
+    const cue = cuesRef.current[index];
+
+    if (!video || !cue) return;
+
+    currentIndexRef.current = index;
+    setCurrentIndex(index);
+    setWordPopup(null);
+
+    seekingRef.current = true;
+    userSeekingRef.current = false;
+    playAfterSeekRef.current = autoplay;
+
+    video.currentTime = cue.start;
+  }, []);
+
+  const nextSentence = useCallback(() => {
+    const nextIndex = currentIndexRef.current + 1;
+
+    if (nextIndex < cuesRef.current.length) {
+      jumpToCue(nextIndex, true);
+    }
+  }, [jumpToCue]);
+
+  const previousSentence = useCallback(() => {
+    const previousIndex = currentIndexRef.current - 1;
+
+    if (previousIndex >= 0) {
+      jumpToCue(previousIndex, true);
+    }
+  }, [jumpToCue]);
+
+  const replaySentence = useCallback(() => {
+    if (currentIndexRef.current >= 0) {
+      jumpToCue(currentIndexRef.current, true);
+    }
+  }, [jumpToCue]);
+
+  const handleTimeUpdate = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const time = video.currentTime;
+    setCurrentTime(time);
+
+    if (seekingRef.current || userSeekingRef.current) return;
+
+    const list = cuesRef.current;
+    const lockedIndex = currentIndexRef.current;
+
+    /*
+     * در حالت تکرار:
+     * پخش از ابتدای کارت انتخاب‌شده شروع می‌شود،
+     * تا ابتدای کارت بعدی ادامه پیدا می‌کند،
+     * سپس دوباره به ابتدای کارت فعلی برمی‌گردد.
+     */
+    if (
+      repeatRef.current &&
+      lockedIndex >= 0 &&
+      list[lockedIndex]
+    ) {
+      const currentCue = list[lockedIndex];
+      const nextCue = list[lockedIndex + 1];
+
+      const repeatBoundary = nextCue
+        ? nextCue.start
+        : currentCue.end;
+
+      if (time >= repeatBoundary - 0.04) {
+        const shouldPlay = !video.paused;
+
+        seekingRef.current = true;
+        playAfterSeekRef.current = shouldPlay;
+        video.currentTime = currentCue.start;
+      }
+
+      return;
+    }
+
+    const detectedIndex = list.findIndex(
+      (cue) => time >= cue.start && time < cue.end
+    );
+
+    if (
+      detectedIndex !== -1 &&
+      detectedIndex !== currentIndexRef.current
+    ) {
+      currentIndexRef.current = detectedIndex;
+      setCurrentIndex(detectedIndex);
+    }
+  };
+
+  const handleSeeked = () => {
+    if (!videoRef.current || !seekingRef.current) return;
+
+    seekingRef.current = false;
+
+    if (playAfterSeekRef.current) {
+      playAfterSeekRef.current = false;
+      playVideo();
+    } else {
+      playAfterSeekRef.current = false;
+    }
+  };
+
+  const handleVideoFile = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (videoUrl) {
-      URL.revokeObjectURL(videoUrl);
-    }
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
 
-    const url = URL.createObjectURL(file);
-
-    setVideoUrl(url);
+    setVideoUrl(URL.createObjectURL(file));
     setVideoName(file.name);
-    setIsPlaying(false);
-    setCurrent(0);
+    setCurrentTime(0);
     setDuration(0);
     setCurrentIndex(-1);
+    setIsPlaying(false);
 
     currentIndexRef.current = -1;
     seekingRef.current = false;
     playAfterSeekRef.current = false;
   };
 
-  const onSubtitleFile = async (file, language) => {
+  const handleSubtitleFile = async (file, language) => {
     if (!file) return;
 
-    const result = await decodeAuto(file);
+    const result = await autoDecodeFile(file);
 
     if (language === "en") {
       setEnFile(file);
@@ -318,7 +412,7 @@ export default function MoviePluss() {
     }
   };
 
-  const onEncodingChange = async (language, encoding) => {
+  const handleEncodingChange = async (language, encoding) => {
     if (language === "en") {
       setEnEncoding(encoding);
 
@@ -334,267 +428,50 @@ export default function MoviePluss() {
     }
   };
 
-  const applySubtitles = useCallback(() => {
-    const englishCues = parseSubtitleText(enText);
-    const persianCues = parseSubtitleText(faText);
-
-    const merged = mergeCues(englishCues, persianCues);
+  const applySubtitles = () => {
+    const merged = mergeSubtitles(enText, faText);
 
     setCues(merged);
     setCurrentIndex(-1);
     currentIndexRef.current = -1;
-  }, [enText, faText]);
-
-  const playVideo = async () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    try {
-      await video.play();
-      setIsPlaying(true);
-    } catch {
-      setIsPlaying(false);
-    }
   };
 
-  const pauseVideo = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.pause();
-    setIsPlaying(false);
-  };
-
-  const playPause = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (video.paused) {
-      playVideo();
-    } else {
-      pauseVideo();
-    }
-  };
-
-  const jumpTo = (index, autoplay = true) => {
-    const video = videoRef.current;
-    const cue = cuesRef.current[index];
-
-    if (!video || !cue) return;
-
-    currentIndexRef.current = index;
-    setCurrentIndex(index);
-    setWordPopup(null);
-
-    seekingRef.current = true;
-    userSeekingRef.current = false;
-    playAfterSeekRef.current = autoplay;
-
-    video.currentTime = cue.start;
-  };
-
-  const replaySentence = () => {
-    if (currentIndexRef.current === -1) return;
-
-    jumpTo(currentIndexRef.current, true);
-  };
-
-  const nextSentence = () => {
-    const nextIndex = currentIndexRef.current + 1;
-
-    if (nextIndex < cuesRef.current.length) {
-      jumpTo(nextIndex, true);
-    }
-  };
-
-  const previousSentence = () => {
-    const previousIndex = currentIndexRef.current - 1;
-
-    if (previousIndex >= 0) {
-      jumpTo(previousIndex, true);
-    }
-  };
-
-  const onTimeUpdate = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const time = video.currentTime;
-    setCurrent(time);
-
-    if (seekingRef.current) return;
-    if (userSeekingRef.current) return;
-
-    const list = cuesRef.current;
-    const lockedIndex = currentIndexRef.current;
-
-    if (
-      repeatRef.current &&
-      lockedIndex !== -1 &&
-      list[lockedIndex]
-    ) {
-      const currentCue = list[lockedIndex];
-      const nextCue = list[lockedIndex + 1];
-
-      const repeatBoundary = nextCue
-        ? nextCue.start
-        : currentCue.end;
-
-      if (
-        time >= repeatBoundary - 0.04 &&
-        time >= currentCue.start - 0.1
-      ) {
-        const wasPlaying = !video.paused;
-
-        seekingRef.current = true;
-        playAfterSeekRef.current = wasPlaying;
-
-        video.currentTime = currentCue.start;
-      }
-
-      return;
-    }
-
-    let detectedIndex = -1;
-
-    for (let i = 0; i < list.length; i++) {
-      const cue = list[i];
-
-      if (time >= cue.start && time < cue.end) {
-        detectedIndex = i;
-        break;
-      }
-    }
-
-    if (
-      detectedIndex !== -1 &&
-      detectedIndex !== currentIndexRef.current
-    ) {
-      currentIndexRef.current = detectedIndex;
-      setCurrentIndex(detectedIndex);
-    }
-  };
-
-  const onSeeked = () => {
-    const video = videoRef.current;
-    if (!video || !seekingRef.current) return;
-
-    seekingRef.current = false;
-
-    if (playAfterSeekRef.current) {
-      playAfterSeekRef.current = false;
-      playVideo();
-    } else {
-      playAfterSeekRef.current = false;
-    }
-  };
-
-  const onProgressMouseDown = () => {
+  const handleProgressMouseDown = () => {
     userSeekingRef.current = true;
     seekingRef.current = false;
     playAfterSeekRef.current = false;
   };
 
-  const onProgressChange = (event) => {
-    setCurrent(Number(event.target.value));
+  const handleProgressChange = (event) => {
+    setCurrentTime(Number(event.target.value));
   };
 
-  const onProgressMouseUp = (event) => {
+  const handleProgressMouseUp = (event) => {
     const video = videoRef.current;
     if (!video) return;
 
-    const newTime = Number(event.target.value);
+    const targetTime = Number(event.target.value);
 
     seekingRef.current = true;
     playAfterSeekRef.current = !video.paused;
-
-    video.currentTime = newTime;
+    video.currentTime = targetTime;
 
     setTimeout(() => {
       userSeekingRef.current = false;
     }, 150);
   };
 
-  useEffect(() => {
-    const video = videoRef.current;
-
-    if (video) {
-      video.playbackRate = rate;
-    }
-  }, [rate, videoUrl]);
-
-  useEffect(() => {
-    if (currentIndex === -1 || !stripRef.current) return;
-
-    const element = stripRef.current.querySelector(
-      `[data-frame="${currentIndex}"]`
-    );
-
-    if (element) {
-      element.scrollIntoView({
-        behavior: "smooth",
-        inline: "center",
-        block: "nearest",
-      });
-    }
-  }, [currentIndex]);
-
-  useEffect(() => {
-    const handler = (event) => {
-      const tagName = document.activeElement?.tagName;
-
-      if (tagName === "TEXTAREA" || tagName === "INPUT") {
-        return;
-      }
-
-      if (!videoRef.current) return;
-
-      if (event.code === "Space") {
-        event.preventDefault();
-        playPause();
-      }
-
-      /*
-       * جهت فلش‌ها به‌صورت کامل جابه‌جا شده است:
-       * فلش چپ = جمله بعدی
-       * فلش راست = جمله قبلی
-       */
-      if (event.code === "ArrowLeft") {
-        event.preventDefault();
-        nextSentence();
-      }
-
-      if (event.code === "ArrowRight") {
-        event.preventDefault();
-        previousSentence();
-      }
-
-      if (event.code === "KeyR") {
-        event.preventDefault();
-        replaySentence();
-      }
-    };
-
-    window.addEventListener("keydown", handler);
-
-    return () => {
-      window.removeEventListener("keydown", handler);
-    };
-  });
-
-  const handleWordClick = async (rawWord) => {
+  const translateWord = async (rawWord) => {
     const word = rawWord.replace(/[^A-Za-z'-]/g, "");
-
     if (!word) return;
 
-    const key = word.toLowerCase();
+    const cacheKey = word.toLowerCase();
 
-    if (translationCache.current[key]) {
+    if (translationCache.current[cacheKey]) {
       setWordPopup({
         word,
-        translation: translationCache.current[key],
+        translation: translationCache.current[cacheKey],
       });
-
       return;
     }
 
@@ -615,9 +492,9 @@ export default function MoviePluss() {
 
       const translation =
         data?.responseData?.translatedText ||
-        "ترجمه یافت نشد";
+        "ترجمه پیدا نشد";
 
-      translationCache.current[key] = translation;
+      translationCache.current[cacheKey] = translation;
 
       setWordPopup({
         word,
@@ -633,22 +510,20 @@ export default function MoviePluss() {
     }
   };
 
-  const renderClickableEnglish = (text, prefix) => {
+  const renderEnglish = (text, keyPrefix) => {
     return text.split(/(\s+)/).map((token, index) => {
-      if (/^\s+$/.test(token) || !token) {
-        return token;
-      }
+      if (/^\s+$/.test(token)) return token;
 
       return (
         <span
-          key={`${prefix}-${index}`}
+          key={`${keyPrefix}-${index}`}
           onClick={(event) => {
             event.stopPropagation();
-            handleWordClick(token);
+            translateWord(token);
           }}
           style={{
             cursor: "pointer",
-            borderBottom: "1px dotted rgba(242,201,76,0.55)",
+            borderBottom: "1px dotted rgba(242,201,76,.6)",
           }}
         >
           {token}
@@ -657,40 +532,107 @@ export default function MoviePluss() {
     });
   };
 
+  useEffect(() => {
+    const handleKeyboard = (event) => {
+      const activeTag = document.activeElement?.tagName;
+
+      if (activeTag === "INPUT" || activeTag === "TEXTAREA") {
+        return;
+      }
+
+      if (event.code === "Space") {
+        event.preventDefault();
+        togglePlay();
+      }
+
+      /*
+       * جهت کلیدها جابه‌جا شده است:
+       * فلش چپ = جمله بعدی
+       * فلش راست = جمله قبلی
+       */
+      if (event.code === "ArrowLeft") {
+        event.preventDefault();
+        nextSentence();
+      }
+
+      if (event.code === "ArrowRight") {
+        event.preventDefault();
+        previousSentence();
+      }
+
+      if (event.code === "KeyR") {
+        event.preventDefault();
+        replaySentence();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyboard);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyboard);
+    };
+  });
+
   const activeCue =
-    currentIndex !== -1 ? cues[currentIndex] : null;
+    currentIndex >= 0 ? cues[currentIndex] : null;
+
+  const englishCount = useMemo(
+    () => parseSubtitleText(enText).length,
+    [enText]
+  );
+
+  const persianCount = useMemo(
+    () => parseSubtitleText(faText).length,
+    [faText]
+  );
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: C.bg,
-        color: C.text,
-        fontFamily: "'Vazirmatn', Tahoma, sans-serif",
-      }}
-    >
+    <div className="movie-pluss" dir="rtl">
       <style>{`
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          margin: 0;
+          background: ${C.bg};
+        }
+
+        .movie-pluss {
+          min-height: 100vh;
+          background: ${C.bg};
+          color: ${C.text};
+          font-family: Vazirmatn, Tahoma, sans-serif;
+        }
+
+        button,
+        input,
+        select,
+        textarea {
+          font-family: inherit;
+        }
+
         input[type="range"] {
-          -webkit-appearance: none;
           appearance: none;
+          width: 100%;
+          height: 5px;
           background: transparent;
+          cursor: pointer;
         }
 
         input[type="range"]::-webkit-slider-runnable-track {
           height: 4px;
           background: ${C.border};
-          border-radius: 2px;
+          border-radius: 4px;
         }
 
         input[type="range"]::-webkit-slider-thumb {
-          -webkit-appearance: none;
           appearance: none;
           width: 13px;
           height: 13px;
           margin-top: -4.5px;
           border-radius: 50%;
           background: ${C.yellow};
-          cursor: pointer;
         }
 
         .frame-card:hover {
@@ -704,7 +646,7 @@ export default function MoviePluss() {
 
         ::-webkit-scrollbar-thumb {
           background: ${C.border};
-          border-radius: 4px;
+          border-radius: 5px;
         }
       `}</style>
 
@@ -719,13 +661,19 @@ export default function MoviePluss() {
           borderBottom: `1px solid ${C.border}`,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Film size={27} color={C.yellow} />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <Film size={28} color={C.yellow} />
 
           <div>
             <div
               style={{
-                fontSize: 26,
+                fontSize: 25,
                 fontWeight: 800,
               }}
             >
@@ -734,11 +682,11 @@ export default function MoviePluss() {
 
             <div
               style={{
-                fontSize: 12,
                 color: C.muted,
+                fontSize: 12,
               }}
             >
-              تمرین زبان با فیلم؛ جمله به جمله، تکرار به تکرار
+              تمرین زبان با فیلم؛ جمله به جمله
             </div>
           </div>
         </div>
@@ -764,50 +712,55 @@ export default function MoviePluss() {
             gridTemplateColumns:
               "repeat(auto-fit, minmax(240px, 1fr))",
             gap: 16,
-            padding: "16px 20px",
+            padding: 20,
             background: C.panel,
             borderBottom: `1px solid ${C.border}`,
           }}
         >
           <div>
-            <label style={labelStyle()}>
+            <label style={uploadLabelStyle()}>
               <Upload size={15} color={C.yellow} />
               {videoName || "انتخاب فایل ویدیو"}
 
               <input
                 type="file"
                 accept="video/*"
-                onChange={onVideoFile}
+                onChange={handleVideoFile}
                 style={{ display: "none" }}
               />
             </label>
           </div>
 
-          <SubtitleUploader
+          <SubtitleBox
             title="زیرنویس انگلیسی"
             language="en"
             file={enFile}
-            encoding={enEncoding}
             text={enText}
-            setText={setEnText}
-            onFile={onSubtitleFile}
-            onEncoding={onEncodingChange}
+            encoding={enEncoding}
             color={C.yellow}
+            onFile={handleSubtitleFile}
+            onTextChange={setEnText}
+            onEncodingChange={handleEncodingChange}
           />
 
-          <SubtitleUploader
+          <SubtitleBox
             title="زیرنویس فارسی"
             language="fa"
             file={faFile}
-            encoding={faEncoding}
             text={faText}
-            setText={setFaText}
-            onFile={onSubtitleFile}
-            onEncoding={onEncodingChange}
+            encoding={faEncoding}
             color={C.teal}
+            onFile={handleSubtitleFile}
+            onTextChange={setFaText}
+            onEncodingChange={handleEncodingChange}
           />
 
-          <div style={{ display: "flex", alignItems: "flex-end" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+            }}
+          >
             <button
               onClick={applySubtitles}
               style={{
@@ -816,13 +769,12 @@ export default function MoviePluss() {
                 border: "none",
                 borderRadius: 8,
                 background: C.yellow,
-                color: "#1a1a1a",
-                fontFamily: "inherit",
+                color: "#171717",
                 fontWeight: 700,
                 cursor: "pointer",
               }}
             >
-              اعمال زیرنویس‌ها ({enCueCount} / {faCueCount})
+              اعمال زیرنویس‌ها ({englishCount} / {persianCount})
             </button>
           </div>
         </section>
@@ -831,9 +783,9 @@ export default function MoviePluss() {
       {!videoUrl ? (
         <div
           style={{
-            padding: 60,
-            textAlign: "center",
+            padding: 70,
             color: C.muted,
+            textAlign: "center",
           }}
         >
           برای شروع، یک فایل ویدیویی انتخاب کنید.
@@ -841,7 +793,7 @@ export default function MoviePluss() {
       ) : (
         <main
           style={{
-            maxWidth: 980,
+            maxWidth: 1000,
             margin: "0 auto",
             padding: 20,
           }}
@@ -850,25 +802,25 @@ export default function MoviePluss() {
             style={{
               position: "relative",
               overflow: "hidden",
-              background: "#000",
               border: `1px solid ${C.border}`,
               borderRadius: 12,
+              background: "#000",
             }}
           >
             <video
               ref={videoRef}
               src={videoUrl}
-              onTimeUpdate={onTimeUpdate}
-              onSeeked={onSeeked}
+              onTimeUpdate={handleTimeUpdate}
+              onSeeked={handleSeeked}
               onLoadedMetadata={(event) =>
-                setDuration(event.target.duration)
+                setDuration(event.currentTarget.duration)
               }
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
               style={{
                 display: "block",
                 width: "100%",
-                maxHeight: "56vh",
+                maxHeight: "58vh",
                 background: "#000",
               }}
             />
@@ -879,15 +831,15 @@ export default function MoviePluss() {
                   position: "absolute",
                   top: 10,
                   left: 10,
-                  zIndex: 5,
+                  zIndex: 3,
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
                   maxWidth: "80%",
                   padding: "8px 12px",
-                  background: "rgba(10,11,16,.92)",
                   border: `1px solid ${C.teal}`,
                   borderRadius: 8,
+                  background: "rgba(10,11,16,.94)",
                 }}
               >
                 <div>
@@ -904,7 +856,7 @@ export default function MoviePluss() {
                   <div
                     dir="rtl"
                     style={{
-                      marginTop: 2,
+                      marginTop: 3,
                       color: C.teal,
                       fontSize: 13,
                     }}
@@ -918,14 +870,14 @@ export default function MoviePluss() {
                 <button
                   onClick={() => setWordPopup(null)}
                   style={{
-                    padding: 0,
+                    display: "flex",
                     border: "none",
                     background: "transparent",
                     color: C.muted,
                     cursor: "pointer",
                   }}
                 >
-                  <X size={14} />
+                  <X size={15} />
                 </button>
               </div>
             )}
@@ -944,31 +896,31 @@ export default function MoviePluss() {
                   padding: "0 16px",
                 }}
               >
-                {showEn && activeCue.en && (
+                {showEnglish && activeCue.en && (
                   <div
                     style={{
                       maxWidth: "90%",
                       padding: "4px 12px",
-                      background: "rgba(0,0,0,.72)",
                       borderRadius: 6,
+                      background: "rgba(0,0,0,.75)",
                       color: C.yellow,
                       fontSize: 17,
                       fontWeight: 600,
                       textAlign: "center",
                     }}
                   >
-                    {renderClickableEnglish(activeCue.en, "overlay")}
+                    {renderEnglish(activeCue.en, "overlay")}
                   </div>
                 )}
 
-                {showFa && activeCue.fa && (
+                {showPersian && activeCue.fa && (
                   <div
                     dir="rtl"
                     style={{
                       maxWidth: "90%",
                       padding: "4px 12px",
-                      background: "rgba(0,0,0,.72)",
                       borderRadius: 6,
+                      background: "rgba(0,0,0,.75)",
                       color: C.teal,
                       fontSize: 17,
                       fontWeight: 600,
@@ -984,18 +936,18 @@ export default function MoviePluss() {
 
           <input
             type="range"
-            min={0}
+            min="0"
             max={duration || 0}
-            step={0.01}
-            value={current}
-            onMouseDown={onProgressMouseDown}
-            onMouseUp={onProgressMouseUp}
-            onTouchStart={onProgressMouseDown}
-            onTouchEnd={onProgressMouseUp}
-            onChange={onProgressChange}
+            step="0.01"
+            value={currentTime}
+            onMouseDown={handleProgressMouseDown}
+            onMouseUp={handleProgressMouseUp}
+            onTouchStart={handleProgressMouseDown}
+            onTouchEnd={handleProgressMouseUp}
+            onChange={handleProgressChange}
             style={{
-              width: "100%",
-              marginTop: 12,
+              display: "block",
+              marginTop: 14,
             }}
           />
 
@@ -1003,15 +955,26 @@ export default function MoviePluss() {
             style={{
               display: "flex",
               justifyContent: "space-between",
-              marginTop: -4,
+              marginTop: -2,
               color: C.muted,
               fontSize: 11,
+              direction: "ltr",
             }}
           >
-            <span>{formatTime(current)}</span>
+            <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
 
+          {/*
+            ترتیب نهایی دکمه‌ها:
+
+            سمت چپ: جمله بعدی
+            وسط: پخش / توقف
+            سمت راست: جمله قبلی
+
+            دکمه‌های بعدی و قبلی هم از نظر جایگاه
+            و هم از نظر عملکرد جابه‌جا شده‌اند.
+          */}
           <div
             style={{
               display: "flex",
@@ -1019,19 +982,11 @@ export default function MoviePluss() {
               justifyContent: "center",
               gap: 10,
               flexWrap: "wrap",
-              marginTop: 14,
+              marginTop: 16,
+              direction: "ltr",
             }}
           >
-            {/*
-              چیدمان و عملکرد دکمه‌ها نیز کاملاً جابه‌جا شده است:
-
-              سمت چپ:
-              فلش چپ = جمله بعدی
-
-              سمت راست:
-              فلش راست = جمله قبلی
-            */}
-
+            {/* سمت چپ: جمله بعدی */}
             <IconButton
               onClick={nextSentence}
               title="جمله بعدی"
@@ -1039,10 +994,11 @@ export default function MoviePluss() {
               <SkipBack size={18} />
             </IconButton>
 
+            {/* پخش / توقف */}
             <IconButton
-              onClick={playPause}
-              big
+              onClick={togglePlay}
               title="پخش / توقف"
+              large
             >
               {isPlaying ? (
                 <Pause size={22} />
@@ -1051,6 +1007,7 @@ export default function MoviePluss() {
               )}
             </IconButton>
 
+            {/* سمت راست: جمله قبلی */}
             <IconButton
               onClick={previousSentence}
               title="جمله قبلی"
@@ -1081,14 +1038,13 @@ export default function MoviePluss() {
                   ? "rgba(242,201,76,.15)"
                   : C.card,
                 color: repeatOn ? C.yellow : C.text,
-                fontFamily: "inherit",
                 fontSize: 13,
                 fontWeight: 700,
                 cursor: "pointer",
               }}
             >
               {repeatOn ? <Repeat1 size={18} /> : <Repeat size={18} />}
-              تکرار جمله: {repeatOn ? "فعال" : "غیرفعال"}
+              تکرار: {repeatOn ? "فعال" : "غیرفعال"}
             </button>
 
             <div
@@ -1096,7 +1052,8 @@ export default function MoviePluss() {
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                padding: "6px 12px",
+                height: 40,
+                padding: "0 12px",
                 border: `1px solid ${C.border}`,
                 borderRadius: 20,
                 background: C.card,
@@ -1105,55 +1062,59 @@ export default function MoviePluss() {
               <Gauge size={15} color={C.muted} />
 
               <select
-                value={rate}
+                value={playbackRate}
                 onChange={(event) =>
-                  setRate(Number(event.target.value))
+                  setPlaybackRate(Number(event.target.value))
                 }
                 style={{
                   border: "none",
                   outline: "none",
                   background: "transparent",
                   color: C.text,
-                  fontFamily: "inherit",
+                  cursor: "pointer",
                 }}
               >
-                {[0.5, 0.75, 1, 1.25, 1.5].map((value) => (
+                {[0.5, 0.75, 1, 1.25, 1.5].map((rate) => (
                   <option
-                    key={value}
-                    value={value}
+                    key={rate}
+                    value={rate}
                     style={{ background: C.card }}
                   >
-                    {value}x
+                    {rate}x
                   </option>
                 ))}
               </select>
             </div>
 
-            <ToggleChip
+            <ToggleButton
               label="EN"
-              active={showEn}
+              active={showEnglish}
               color={C.yellow}
-              onClick={() => setShowEn((value) => !value)}
+              onClick={() =>
+                setShowEnglish((value) => !value)
+              }
             />
 
-            <ToggleChip
+            <ToggleButton
               label="FA"
-              active={showFa}
+              active={showPersian}
               color={C.teal}
-              onClick={() => setShowFa((value) => !value)}
+              onClick={() =>
+                setShowPersian((value) => !value)
+              }
             />
           </div>
 
           {cues.length > 0 && (
-            <section style={{ marginTop: 24 }}>
+            <section style={{ marginTop: 25 }}>
               <div
                 style={{
-                  marginBottom: 8,
+                  marginBottom: 9,
                   color: C.muted,
                   fontSize: 12,
                 }}
               >
-                نماها ({cues.length}) — برای پخش روی کارت کلیک کنید
+                کارت‌ها ({cues.length}) — برای پخش روی کارت کلیک کنید
               </div>
 
               <div
@@ -1163,6 +1124,7 @@ export default function MoviePluss() {
                   gap: 10,
                   overflowX: "auto",
                   paddingBottom: 10,
+                  direction: "ltr",
                 }}
               >
                 {cues.map((cue, index) => (
@@ -1170,12 +1132,12 @@ export default function MoviePluss() {
                     key={index}
                     data-frame={index}
                     className="frame-card"
-                    onClick={() => jumpTo(index, true)}
+                    onClick={() => jumpToCue(index, true)}
                     style={{
-                      minWidth: 210,
-                      maxWidth: 210,
+                      minWidth: 215,
+                      maxWidth: 215,
                       flexShrink: 0,
-                      padding: "8px 10px",
+                      padding: "9px 10px",
                       border: `1px solid ${
                         index === currentIndex
                           ? C.yellow
@@ -1184,7 +1146,7 @@ export default function MoviePluss() {
                       borderRadius: 10,
                       background:
                         index === currentIndex
-                          ? C.cardActive
+                          ? C.active
                           : C.card,
                       cursor: "pointer",
                     }}
@@ -1193,13 +1155,13 @@ export default function MoviePluss() {
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        marginBottom: 6,
+                        marginBottom: 7,
                         color: C.muted,
                         fontSize: 10,
                       }}
                     >
                       <span>
-                        نما {String(cue.index).padStart(2, "0")}
+                        کارت {String(cue.index).padStart(2, "0")}
                       </span>
                       <span>{formatTime(cue.start)}</span>
                     </div>
@@ -1207,16 +1169,13 @@ export default function MoviePluss() {
                     {cue.en && (
                       <div
                         style={{
-                          marginBottom: 4,
+                          marginBottom: 5,
                           color: C.yellow,
                           fontSize: 12.5,
-                          lineHeight: 1.4,
+                          lineHeight: 1.45,
                         }}
                       >
-                        {renderClickableEnglish(
-                          cue.en,
-                          `strip-${index}`
-                        )}
+                        {renderEnglish(cue.en, `card-${index}`)}
                       </div>
                     )}
 
@@ -1243,16 +1202,16 @@ export default function MoviePluss() {
   );
 }
 
-function SubtitleUploader({
+function SubtitleBox({
   title,
   language,
   file,
-  encoding,
   text,
-  setText,
-  onFile,
-  onEncoding,
+  encoding,
   color,
+  onFile,
+  onTextChange,
+  onEncodingChange,
 }) {
   return (
     <div>
@@ -1277,16 +1236,16 @@ function SubtitleUploader({
           borderRadius: 8,
           background: C.card,
           color: C.text,
-          fontSize: 12.5,
+          fontSize: 12,
           cursor: "pointer",
         }}
       >
         <Upload size={14} color={color} />
-        {file ? file.name : `بارگذاری فایل ${language.toUpperCase()}`}
+        {file ? file.name : "بارگذاری فایل"}
 
         <input
           type="file"
-          accept=".srt,.vtt,text/plain"
+          accept=".srt,.vtt,.txt,text/plain"
           onChange={(event) => {
             const selectedFile = event.target.files?.[0];
 
@@ -1301,18 +1260,18 @@ function SubtitleUploader({
       <select
         value={encoding}
         onChange={(event) =>
-          onEncoding(language, event.target.value)
+          onEncodingChange(language, event.target.value)
         }
         style={{
           width: "100%",
           marginBottom: 6,
-          padding: 6,
+          padding: 7,
           border: `1px solid ${C.border}`,
-          borderRadius: 6,
+          borderRadius: 7,
+          outline: "none",
           background: C.card,
           color: C.text,
-          fontFamily: "inherit",
-          fontSize: 11.5,
+          fontSize: 11,
         }}
       >
         {ENCODINGS.map((item) => (
@@ -1328,13 +1287,12 @@ function SubtitleUploader({
 
       <textarea
         value={text}
-        onChange={(event) => setText(event.target.value)}
-        placeholder="متن زیرنویس را اینجا وارد کنید..."
+        onChange={(event) => onTextChange(event.target.value)}
+        placeholder="متن زیرنویس را وارد کنید..."
         dir={language === "fa" ? "rtl" : "ltr"}
         style={{
           width: "100%",
-          height: 65,
-          boxSizing: "border-box",
+          height: 68,
           padding: 8,
           resize: "vertical",
           border: `1px solid ${C.border}`,
@@ -1351,38 +1309,12 @@ function SubtitleUploader({
   );
 }
 
-function buttonStyle() {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "8px 12px",
-    border: `1px solid ${C.border}`,
-    borderRadius: 8,
-    background: C.card,
-    color: C.text,
-    fontFamily: "inherit",
-    fontSize: 13,
-    cursor: "pointer",
-  };
-}
-
-function labelStyle() {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "10px 12px",
-    border: `1px dashed ${C.border}`,
-    borderRadius: 8,
-    background: C.card,
-    color: C.text,
-    fontSize: 13,
-    cursor: "pointer",
-  };
-}
-
-function IconButton({ children, onClick, title, big = false }) {
+function IconButton({
+  children,
+  onClick,
+  title,
+  large = false,
+}) {
   return (
     <button
       onClick={onClick}
@@ -1391,8 +1323,8 @@ function IconButton({ children, onClick, title, big = false }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        width: big ? 52 : 40,
-        height: big ? 52 : 40,
+        width: large ? 52 : 40,
+        height: large ? 52 : 40,
         border: `1px solid ${C.border}`,
         borderRadius: "50%",
         background: C.card,
@@ -1405,12 +1337,13 @@ function IconButton({ children, onClick, title, big = false }) {
   );
 }
 
-function ToggleChip({ label, active, color, onClick }) {
+function ToggleButton({ label, active, color, onClick }) {
   return (
     <button
       onClick={onClick}
       style={{
-        padding: "6px 14px",
+        height: 40,
+        padding: "0 14px",
         border: `1px solid ${active ? color : C.border}`,
         borderRadius: 20,
         background: active ? `${color}22` : C.card,
@@ -1423,4 +1356,34 @@ function ToggleChip({ label, active, color, onClick }) {
       {label}
     </button>
   );
+}
+
+function buttonStyle() {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 12px",
+    border: `1px solid ${C.border}`,
+    borderRadius: 8,
+    background: C.card,
+    color: C.text,
+    fontSize: 13,
+    cursor: "pointer",
+  };
+}
+
+function uploadLabelStyle() {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "10px 12px",
+    border: `1px dashed ${C.border}`,
+    borderRadius: 8,
+    background: C.card,
+    color: C.text,
+    fontSize: 13,
+    cursor: "pointer",
+  };
 }
