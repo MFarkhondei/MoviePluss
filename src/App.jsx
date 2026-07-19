@@ -762,7 +762,7 @@ export default function MoviePluss() {
 
   /*
     کلیک راست روی ویدیو → نمایش کارت بعدی
-    کلیک چپ روی ویدیو → نمایش کارت قبلی
+    کلیک چپ روی ویدیو → توقف پخش
     منوی راست‌کلیک پیش‌فرض مرورگر غیرفعال می‌شود.
   */
   const handleVideoContextMenu = (event) => {
@@ -772,7 +772,8 @@ export default function MoviePluss() {
   };
 
   const handleVideoClick = () => {
-    goToPreviousCard();
+    // توقف پخش با کلیک چپ
+    pauseVideo();
   };
 
   useEffect(() => {
@@ -1096,7 +1097,7 @@ export default function MoviePluss() {
           ) : (
             <>
               {/*
-                کلیک چپ روی ویدیو → کارت قبلی
+                کلیک چپ روی ویدیو → توقف پخش
                 کلیک راست روی ویدیو → کارت بعدی
                 دابل کلیک → تمام‌صفحه
               */}
