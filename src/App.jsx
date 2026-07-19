@@ -319,6 +319,7 @@ export default function MoviePluss() {
     video.currentTime = cue.start;
   }, []);
 
+  // دکمه سمت چپ: کارت بعدی
   const nextSentence = useCallback(() => {
     const nextIndex = currentIndexRef.current + 1;
 
@@ -327,6 +328,7 @@ export default function MoviePluss() {
     }
   }, [jumpToCue]);
 
+  // دکمه سمت راست: کارت قبلی
   const previousSentence = useCallback(() => {
     const previousIndex = currentIndexRef.current - 1;
 
@@ -490,7 +492,9 @@ export default function MoviePluss() {
   };
 
   const translateWord = async (rawWord) => {
-    const word = rawWord.replace(/[^A-Za-z'-]/g, "");
+    const word = rawWord
+      .replace(/[^A-Za-z'-]/g, "")
+      .trim();
 
     if (!word) return;
 
@@ -541,6 +545,10 @@ export default function MoviePluss() {
     }
   };
 
+  /*
+    این تابع هم برای کلمات انگلیسی کارت‌ها و هم برای
+    کلمات انگلیسی زیرنویس روی خود فیلم استفاده می‌شود.
+  */
   const renderEnglish = (text, prefix) => {
     return text.split(/(\s+)/).map((token, index) => {
       if (/^\s+$/.test(token)) return token;
@@ -552,8 +560,10 @@ export default function MoviePluss() {
             event.stopPropagation();
             translateWord(token);
           }}
+          title="برای ترجمه کلیک کنید"
           style={{
             cursor: "pointer",
+            pointerEvents: "auto",
             borderBottom: `1px dotted ${COLORS.yellow}`,
           }}
         >
@@ -695,6 +705,19 @@ export default function MoviePluss() {
           height: 100%;
           max-height: 100vh;
           object-fit: contain;
+        }
+
+        /*
+          پنجره ترجمه به صورت fixed در سمت راست صفحه قرار می‌گیرد.
+          بنابراین هم برای کلیک روی کارت و هم برای کلیک روی زیرنویس
+          داخل فیلم، ترجمه در سمت راست صفحه نمایش داده می‌شود.
+        */
+        .word-translation-popup {
+          position: fixed;
+          top: 110px;
+          right: 20px;
+          z-index: 9999;
+          width: min(300px, calc(100vw - 40px));
         }
 
         ::-webkit-scrollbar {
@@ -888,62 +911,6 @@ export default function MoviePluss() {
               }}
             />
 
-            {wordPopup && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 10,
-                  left: 10,
-                  zIndex: 3,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  maxWidth: "80%",
-                  padding: "8px 12px",
-                  border: `1px solid ${COLORS.teal}`,
-                  borderRadius: 8,
-                  background: "rgba(10,11,16,.94)",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      color: COLORS.yellow,
-                      fontSize: 13,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {wordPopup.word}
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 3,
-                      color: COLORS.teal,
-                      fontSize: 13,
-                    }}
-                  >
-                    {wordPopup.loading
-                      ? "در حال دریافت ترجمه..."
-                      : wordPopup.translation}
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setWordPopup(null)}
-                  style={{
-                    display: "flex",
-                    border: "none",
-                    background: "transparent",
-                    color: COLORS.muted,
-                    cursor: "pointer",
-                  }}
-                >
-                  <X size={15} />
-                </button>
-              </div>
-            )}
-
             {activeCue && (
               <div
                 style={{
@@ -971,6 +938,7 @@ export default function MoviePluss() {
                       fontWeight: 600,
                       textAlign: "center",
                       direction: "ltr",
+                      pointerEvents: "auto",
                     }}
                   >
                     {renderEnglish(activeCue.en, "overlay")}
@@ -988,6 +956,7 @@ export default function MoviePluss() {
                       fontSize: 17,
                       fontWeight: 600,
                       textAlign: "center",
+                      pointerEvents: "none",
                     }}
                   >
                     {activeCue.fa}
@@ -996,6 +965,67 @@ export default function MoviePluss() {
               </div>
             )}
           </div>
+
+          {wordPopup && (
+            <div className="word-translation-popup">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  padding: "12px 14px",
+                  border: `1px solid ${COLORS.teal}`,
+                  borderRadius: 10,
+                  background: "rgba(10,11,16,.97)",
+                  boxShadow: "0 8px 30px rgba(0,0,0,.35)",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      color: COLORS.yellow,
+                      fontSize: 14,
+                      fontWeight: 800,
+                      direction: "ltr",
+                      textAlign: "left",
+                    }}
+                  >
+                    {wordPopup.word}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 5,
+                      color: COLORS.teal,
+                      fontSize: 14,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {wordPopup.loading
+                      ? "در حال دریافت ترجمه..."
+                      : wordPopup.translation}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setWordPopup(null)}
+                  title="بستن ترجمه"
+                  style={{
+                    display: "flex",
+                    flexShrink: 0,
+                    padding: 2,
+                    border: "none",
+                    background: "transparent",
+                    color: COLORS.muted,
+                    cursor: "pointer",
+                  }}
+                >
+                  <X size={17} />
+                </button>
+              </div>
+            </div>
+          )}
 
           <div
             style={{
@@ -1084,8 +1114,7 @@ export default function MoviePluss() {
               direction: "rtl",
             }}
           >
-            {/* دکمه‌های تکرار جمله و سرعت به سمت راست کلیدهای کنترل منتقل شدند */}
-
+            {/* تکرار جمله و سرعت در سمت راست کلیدهای کنترل */}
             <button
               onClick={() => setRepeatOn((value) => !value)}
               style={{
@@ -1164,7 +1193,7 @@ export default function MoviePluss() {
               </select>
             </div>
 
-            {/* سمت راست: کارت قبلی؛ شکل فلش همچنان برعکس است */}
+            {/* سمت راست: کارت قبلی */}
             <IconButton
               onClick={previousSentence}
               title="کارت قبلی"
@@ -1184,7 +1213,7 @@ export default function MoviePluss() {
               )}
             </IconButton>
 
-            {/* سمت چپ: کارت بعدی؛ شکل فلش همچنان برعکس است */}
+            {/* سمت چپ: کارت بعدی */}
             <IconButton
               onClick={nextSentence}
               title="کارت بعدی"
