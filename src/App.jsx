@@ -1740,3 +1740,150 @@ function SubtitleInput({
         onChange={(event) =>
           onEncoding(language, event.target.value)
         }
+        style={selectStyle(true)}
+      >
+        {ENCODINGS.map((item) => (
+          <option
+            key={item.value}
+            value={item.value}
+            style={{ background: COLORS.card }}
+          >
+            {item.label}
+          </option>
+        ))}
+      </select>
+
+      <textarea
+        value={text}
+        onChange={(event) => onText(event.target.value)}
+        placeholder="متن زیرنویس را وارد کنید..."
+        dir={language === "fa" ? "rtl" : "ltr"}
+        style={{
+          width: "100%",
+          height: 65,
+          resize: "vertical",
+          padding: 8,
+          marginTop: 6,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 8,
+          outline: "none",
+          background: COLORS.card,
+          color: COLORS.text,
+          fontSize: 11,
+        }}
+      />
+    </div>
+  );
+}
+
+function SettingRange({ label, value, min, max, onChange }) {
+  return (
+    <label
+      style={{
+        display: "block",
+        marginBottom: 12,
+        color: COLORS.text,
+        fontSize: 11,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 5,
+        }}
+      >
+        <span>{label}</span>
+        <span style={{ color: COLORS.muted }}>{value}</span>
+      </div>
+
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(event) =>
+          onChange(Number(event.target.value))
+        }
+      />
+    </label>
+  );
+}
+
+function ControlButton({
+  children,
+  onClick,
+  active = false,
+  title,
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 34,
+        height: 32,
+        padding: 0,
+        border: `1px solid ${
+          active ? COLORS.yellow : "transparent"
+        }`,
+        borderRadius: 7,
+        background: active
+          ? "rgba(242,201,76,.18)"
+          : "rgba(0,0,0,.3)",
+        color: active ? COLORS.yellow : COLORS.text,
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function buttonStyle() {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    padding: "8px 12px",
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 8,
+    background: COLORS.card,
+    color: COLORS.text,
+    cursor: "pointer",
+  };
+}
+
+function uploadBoxStyle() {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 42,
+    padding: "8px 12px",
+    border: `1px dashed ${COLORS.border}`,
+    borderRadius: 8,
+    background: COLORS.card,
+    color: COLORS.text,
+    fontSize: 12,
+    cursor: "pointer",
+  };
+}
+
+function selectStyle(full = false) {
+  return {
+    width: full ? "100%" : "auto",
+    minHeight: 32,
+    padding: "3px 7px",
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 6,
+    outline: "none",
+    background: COLORS.card,
+    color: COLORS.text,
+    fontSize: 11,
+    cursor: "pointer",
+  };
+}
