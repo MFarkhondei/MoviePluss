@@ -185,7 +185,7 @@ export default function Home() {
 
   return (
     <div style={{ maxWidth: '900px', margin: '20px auto', padding: '20px' }}>
-      <h1 style={{ textAlign: 'center' }}>🎬 پخش‌کننده با زیرنویس خودکار</h1>
+      <h1 style={{ textAlign: 'center' }}>🎬 فیلم پلاس | MoviePluss</h1>
 
       {/* بخش تنظیمات و آپلود */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginBottom: '20px', padding: '15px', border: '1px solid #ddd', borderRadius: '12px' }}>
