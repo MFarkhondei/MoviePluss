@@ -20,8 +20,6 @@ import {
   RotateCcw,
   RotateCw,
   Settings,
-  SkipBack,
-  SkipForward,
   Subtitles,
   Volume1,
   Volume2,
@@ -762,6 +760,21 @@ export default function MoviePluss() {
     handleTranslationPointerUp,
   ]);
 
+  /*
+    کلیک راست روی ویدیو → نمایش کارت بعدی
+    کلیک چپ روی ویدیو → نمایش کارت قبلی
+    منوی راست‌کلیک پیش‌فرض مرورگر غیرفعال می‌شود.
+  */
+  const handleVideoContextMenu = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    goToNextCard();
+  };
+
+  const handleVideoClick = () => {
+    goToPreviousCard();
+  };
+
   useEffect(() => {
     const handleKeyboard = (event) => {
       const tag = document.activeElement?.tagName;
@@ -1082,6 +1095,11 @@ export default function MoviePluss() {
             </label>
           ) : (
             <>
+              {/*
+                کلیک چپ روی ویدیو → کارت قبلی
+                کلیک راست روی ویدیو → کارت بعدی
+                دابل کلیک → تمام‌صفحه
+              */}
               <video
                 ref={videoRef}
                 src={videoUrl}
@@ -1090,7 +1108,8 @@ export default function MoviePluss() {
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
                 onDoubleClick={toggleFullscreen}
-                onClick={togglePlay}
+                onClick={handleVideoClick}
+                onContextMenu={handleVideoContextMenu}
                 style={{
                   display: "block",
                   width: "100%",
@@ -1277,6 +1296,9 @@ export default function MoviePluss() {
                 onClick={(event) =>
                   event.stopPropagation()
                 }
+                onContextMenu={(event) =>
+                  event.stopPropagation()
+                }
               >
                 <input
                   type="range"
@@ -1310,12 +1332,31 @@ export default function MoviePluss() {
                     )}
                   </ControlButton>
 
-                  <ControlButton onClick={() => seekBy(-10)}>
-                    <RotateCcw size={18} />
+                  {/*
+                    دکمه‌های جلو/عقب فیلم حذف شده و
+                    دکمه‌های کارت قبلی/بعدی جایگزین شده‌اند.
+                    ChevronRight = کارت قبلی
+                    ChevronLeft = کارت بعدی
+                  */}
+                  <ControlButton
+                    onClick={goToPreviousCard}
+                    title="کارت قبلی"
+                  >
+                    <ChevronRight size={20} />
                   </ControlButton>
 
-                  <ControlButton onClick={() => seekBy(10)}>
-                    <RotateCw size={18} />
+                  <ControlButton
+                    onClick={goToNextCard}
+                    title="کارت بعدی"
+                  >
+                    <ChevronLeft size={20} />
+                  </ControlButton>
+
+                  <ControlButton
+                    onClick={replayCurrentCard}
+                    title="شروع مجدد کارت"
+                  >
+                    <RotateCcw size={18} />
                   </ControlButton>
 
                   <ControlButton onClick={toggleMute}>
@@ -1417,6 +1458,17 @@ export default function MoviePluss() {
                     onClick={() =>
                       setShowEnglish((value) => !value)
                     }
+                    title="ترجمه انگلیسی"
+                  >
+                    <Subtitles size={18} />
+                  </ControlButton>
+
+                  <ControlButton
+                    active={showPersian}
+                    onClick={() =>
+                      setShowPersian((value) => !value)
+                    }
+                    title="ترجمه فارسی"
                   >
                     <Subtitles size={18} />
                   </ControlButton>
@@ -1454,6 +1506,9 @@ export default function MoviePluss() {
                     background: "rgba(20,23,31,.97)",
                   }}
                   onClick={(event) =>
+                    event.stopPropagation()
+                  }
+                  onContextMenu={(event) =>
                     event.stopPropagation()
                   }
                 >
@@ -1516,231 +1571,113 @@ export default function MoviePluss() {
           )}
         </div>
 
-        {videoUrl && (
-          <>
-            {/*
-              تمام دکمه‌های مربوط به کارت‌ها و زیرنویس‌ها
-              به زیر کادر فیلم منتقل شده‌اند.
-              
-              ترتیب از راست به چپ:
-              قبلی، تکرار، پخش، بعدی، ترجمه انگلیسی، ترجمه فارسی
-            */}
+        {videoUrl && cues.length > 0 && (
+          <section style={{ marginTop: 25 }}>
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                gap: 9,
-                flexWrap: "wrap",
-                marginTop: 16,
-                direction: "rtl",
+                justifyContent: "space-between",
+                marginBottom: 9,
+                color: COLORS.muted,
+                fontSize: 12,
               }}
             >
-              {/* سمت راست: کارت قبلی */}
-              <RoundButton
-                title="کارت قبلی"
-                onClick={goToPreviousCard}
-              >
-                <ChevronRight size={20} />
-              </RoundButton>
-
-              <button
-                onClick={replayCurrentCard}
-                title="شروع مجدد کارت"
-                style={pillButtonStyle()}
-              >
-                <RotateCcw size={16} />
-                شروع مجدد
-              </button>
-
-              <button
-                onClick={() =>
-                  setRepeatOn((value) => !value)
-                }
-                title="فعال یا غیرفعال کردن تکرار جمله"
-                style={{
-                  ...pillButtonStyle(),
-                  color: repeatOn
-                    ? COLORS.yellow
-                    : COLORS.muted,
-                  borderColor: repeatOn
-                    ? COLORS.yellow
-                    : COLORS.border,
-                }}
-              >
-                <RotateCw size={16} />
-                تکرار جمله
-              </button>
-
-              <RoundButton
-                title="پخش / توقف"
-                large
-                onClick={togglePlay}
-              >
-                {isPlaying ? (
-                  <CirclePause size={28} />
-                ) : (
-                  <CirclePlay size={28} />
-                )}
-              </RoundButton>
-
-              {/* سمت چپ: کارت بعدی */}
-              <RoundButton
-                title="کارت بعدی"
-                onClick={goToNextCard}
-              >
-                <ChevronLeft size={20} />
-              </RoundButton>
-
-              {/* ترجمه انگلیسی و فارسی کنار هم */}
-              <button
-                onClick={() =>
-                  setShowEnglish((value) => !value)
-                }
-                style={{
-                  ...pillButtonStyle(),
-                  color: showEnglish
-                    ? COLORS.yellow
-                    : COLORS.muted,
-                  borderColor: showEnglish
-                    ? COLORS.yellow
-                    : COLORS.border,
-                }}
-              >
-                <Subtitles size={16} />
-                ترجمه انگلیسی
-              </button>
-
-              <button
-                onClick={() =>
-                  setShowPersian((value) => !value)
-                }
-                style={{
-                  ...pillButtonStyle(),
-                  color: showPersian
-                    ? COLORS.teal
-                    : COLORS.muted,
-                  borderColor: showPersian
-                    ? COLORS.teal
-                    : COLORS.border,
-                }}
-              >
-                <Subtitles size={16} />
-                ترجمه فارسی
-              </button>
+              <span>کارت‌ها ({cues.length})</span>
+              <span>
+                کارت{" "}
+                {currentCue >= 0 ? currentCue + 1 : "-"}
+              </span>
             </div>
 
-            {cues.length > 0 && (
-              <section style={{ marginTop: 25 }}>
+            {/*
+              مهم:
+              direction: ltr باعث می‌شود کارت‌ها از سمت چپ
+              شروع شوند و کارت اول در سمت چپ قرار بگیرد.
+            */}
+            <div
+              ref={cardsRef}
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                gap: 10,
+                overflowX: "auto",
+                paddingBottom: 10,
+                direction: "ltr",
+              }}
+            >
+              {cues.map((cue, index) => (
                 <div
+                  key={index}
+                  data-card={index}
+                  className="subtitle-card"
+                  onClick={() => jumpToCue(index, true)}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: 9,
-                    color: COLORS.muted,
-                    fontSize: 12,
+                    minWidth: 230,
+                    maxWidth: 230,
+                    flexShrink: 0,
+                    padding: 11,
+                    border: `1px solid ${
+                      currentCue === index
+                        ? COLORS.yellow
+                        : COLORS.border
+                    }`,
+                    borderRadius: 10,
+                    background:
+                      currentCue === index
+                        ? COLORS.active
+                        : COLORS.card,
+                    cursor: "pointer",
+                    direction: "rtl",
                   }}
                 >
-                  <span>کارت‌ها ({cues.length})</span>
-                  <span>
-                    کارت{" "}
-                    {currentCue >= 0 ? currentCue + 1 : "-"}
-                  </span>
-                </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                      color: COLORS.muted,
+                      fontSize: 10,
+                    }}
+                  >
+                    <span>کارت {index + 1}</span>
+                    <span>{formatTime(cue.start)}</span>
+                  </div>
 
-                {/*
-                  مهم:
-                  direction: ltr باعث می‌شود کارت‌ها از سمت چپ
-                  شروع شوند و کارت اول در سمت چپ قرار بگیرد.
-                */}
-                <div
-                  ref={cardsRef}
-                  style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    gap: 10,
-                    overflowX: "auto",
-                    paddingBottom: 10,
-                    direction: "ltr",
-                  }}
-                >
-                  {cues.map((cue, index) => (
+                  {cue.en && (
                     <div
-                      key={index}
-                      data-card={index}
-                      className="subtitle-card"
-                      onClick={() =>
-                        jumpToCue(index, true)
-                      }
                       style={{
-                        minWidth: 230,
-                        maxWidth: 230,
-                        flexShrink: 0,
-                        padding: 11,
-                        border: `1px solid ${
-                          currentCue === index
-                            ? COLORS.yellow
-                            : COLORS.border
-                        }`,
-                        borderRadius: 10,
-                        background:
-                          currentCue === index
-                            ? COLORS.active
-                            : COLORS.card,
-                        cursor: "pointer",
-                        direction: "rtl",
+                        color: COLORS.yellow,
+                        fontSize: 12,
+                        lineHeight: 1.6,
+                        direction: "ltr",
+                        textAlign: "left",
                       }}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: 8,
-                          color: COLORS.muted,
-                          fontSize: 10,
-                        }}
-                      >
-                        <span>کارت {index + 1}</span>
-                        <span>{formatTime(cue.start)}</span>
-                      </div>
-
-                      {cue.en && (
-                        <div
-                          style={{
-                            color: COLORS.yellow,
-                            fontSize: 12,
-                            lineHeight: 1.6,
-                            direction: "ltr",
-                            textAlign: "left",
-                          }}
-                        >
-                          {renderEnglish(
-                            cue.en,
-                            `card-${index}`
-                          )}
-                        </div>
-                      )}
-
-                      {cue.fa && (
-                        <div
-                          style={{
-                            marginTop: 5,
-                            color: COLORS.teal,
-                            fontSize: 12,
-                            lineHeight: 1.7,
-                            textAlign: "right",
-                          }}
-                        >
-                          {cue.fa}
-                        </div>
+                      {renderEnglish(
+                        cue.en,
+                        `card-${index}`
                       )}
                     </div>
-                  ))}
+                  )}
+
+                  {cue.fa && (
+                    <div
+                      style={{
+                        marginTop: 5,
+                        color: COLORS.teal,
+                        fontSize: 12,
+                        lineHeight: 1.7,
+                        textAlign: "right",
+                      }}
+                    >
+                      {cue.fa}
+                    </div>
+                  )}
                 </div>
-              </section>
-            )}
-          </>
+              ))}
+            </div>
+          </section>
         )}
       </main>
     </div>
@@ -1803,198 +1740,3 @@ function SubtitleInput({
         onChange={(event) =>
           onEncoding(language, event.target.value)
         }
-        style={selectStyle(true)}
-      >
-        {ENCODINGS.map((item) => (
-          <option
-            key={item.value}
-            value={item.value}
-            style={{ background: COLORS.card }}
-          >
-            {item.label}
-          </option>
-        ))}
-      </select>
-
-      <textarea
-        value={text}
-        onChange={(event) => onText(event.target.value)}
-        placeholder="متن زیرنویس را وارد کنید..."
-        dir={language === "fa" ? "rtl" : "ltr"}
-        style={{
-          width: "100%",
-          height: 65,
-          resize: "vertical",
-          padding: 8,
-          border: `1px solid ${COLORS.border}`,
-          borderRadius: 8,
-          outline: "none",
-          background: COLORS.card,
-          color: COLORS.text,
-          fontSize: 11,
-        }}
-      />
-    </div>
-  );
-}
-
-function SettingRange({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-}) {
-  return (
-    <label
-      style={{
-        display: "block",
-        marginBottom: 12,
-        color: COLORS.text,
-        fontSize: 11,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 5,
-        }}
-      >
-        <span>{label}</span>
-        <span style={{ color: COLORS.muted }}>{value}</span>
-      </div>
-
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) =>
-          onChange(Number(event.target.value))
-        }
-      />
-    </label>
-  );
-}
-
-function ControlButton({
-  children,
-  onClick,
-  active = false,
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 34,
-        height: 32,
-        padding: 0,
-        border: `1px solid ${
-          active ? COLORS.yellow : "transparent"
-        }`,
-        borderRadius: 7,
-        background: active
-          ? "rgba(242,201,76,.18)"
-          : "rgba(0,0,0,.3)",
-        color: active ? COLORS.yellow : COLORS.text,
-        cursor: "pointer",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function RoundButton({
-  children,
-  onClick,
-  title,
-  large = false,
-}) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: large ? 56 : 43,
-        height: large ? 56 : 43,
-        padding: 0,
-        border: `1px solid ${COLORS.border}`,
-        borderRadius: "50%",
-        background: COLORS.card,
-        color: COLORS.text,
-        cursor: "pointer",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function buttonStyle() {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    padding: "8px 12px",
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 8,
-    background: COLORS.card,
-    color: COLORS.text,
-    cursor: "pointer",
-  };
-}
-
-function uploadBoxStyle() {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    minHeight: 42,
-    padding: "8px 12px",
-    border: `1px dashed ${COLORS.border}`,
-    borderRadius: 8,
-    background: COLORS.card,
-    color: COLORS.text,
-    fontSize: 12,
-    cursor: "pointer",
-  };
-}
-
-function selectStyle(full = false) {
-  return {
-    width: full ? "100%" : "auto",
-    minHeight: 32,
-    padding: "3px 7px",
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 6,
-    outline: "none",
-    background: COLORS.card,
-    color: COLORS.text,
-    fontSize: 11,
-    cursor: "pointer",
-  };
-}
-
-function pillButtonStyle() {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    minHeight: 42,
-    padding: "0 13px",
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 22,
-    background: COLORS.card,
-    color: COLORS.text,
-    fontSize: 12,
-    cursor: "pointer",
-  };
-}
