@@ -226,7 +226,7 @@ export default function MoviePluss() {
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
   const [subtitleSize, setSubtitleSize] = useState(100);
-  const [subtitleBottom, setSubtitleBottom] = useState(14);
+  const [subtitleBottom, setSubtitleBottom] = useState(70); // تغییر به 70
   const [subtitleBackground, setSubtitleBackground] =
     useState(true);
 
@@ -754,9 +754,9 @@ export default function MoviePluss() {
     goToNextCard();
   };
 
-  // کلیک چپ روی ویدیو → کارت قبلی
+  // کلیک چپ روی ویدیو → توقف/شروع پخش
   const handleVideoClick = () => {
-    goToPreviousCard();
+    togglePlay();
   };
 
   useEffect(() => {
@@ -776,12 +776,14 @@ export default function MoviePluss() {
         togglePlay();
       }
 
-      if (event.key === "ArrowLeft") {
+      // کلید راست → کارت بعدی
+      if (event.key === "ArrowRight") {
         event.preventDefault();
         goToNextCard();
       }
 
-      if (event.key === "ArrowRight") {
+      // کلید چپ → کارت قبلی
+      if (event.key === "ArrowLeft") {
         event.preventDefault();
         goToPreviousCard();
       }
@@ -1080,7 +1082,7 @@ export default function MoviePluss() {
           ) : (
             <>
               {/*
-                کلیک چپ روی ویدیو → کارت قبلی
+                کلیک چپ روی ویدیو → توقف/شروع پخش
                 کلیک راست روی ویدیو → کارت بعدی
                 دابل کلیک → تمام‌صفحه
               */}
