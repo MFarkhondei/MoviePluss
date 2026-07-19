@@ -105,6 +105,7 @@ function parseSubtitleText(raw = "") {
 function mergeSubtitles(englishText, persianText) {
   const englishCues = parseSubtitleText(englishText);
   const persianCues = parseSubtitleText(persianText);
+
   const count = Math.max(
     englishCues.length,
     persianCues.length
@@ -344,11 +345,6 @@ export default function MoviePluss() {
     const list = cuesRef.current;
     const lockedIndex = currentIndexRef.current;
 
-    /*
-     * در حالت تکرار، پخش از ابتدای کارت فعال شروع می‌شود
-     * و تا ابتدای کارت بعدی ادامه پیدا می‌کند؛ سپس دوباره
-     * به ابتدای همان کارت برمی‌گردد.
-     */
     if (
       repeatRef.current &&
       lockedIndex >= 0 &&
@@ -593,11 +589,6 @@ export default function MoviePluss() {
         togglePlay();
       }
 
-      /*
-       * عملکرد کلیدها مانند حالت قبل باقی مانده است:
-       * ArrowLeft  = قبلی
-       * ArrowRight = بعدی
-       */
       if (event.code === "ArrowLeft") {
         event.preventDefault();
         previousSentence();
@@ -1032,7 +1023,6 @@ export default function MoviePluss() {
               direction: "ltr",
             }}
           >
-            {/* فقط جای دکمه قبلی به سمت چپ منتقل شده است */}
             <IconButton
               onClick={previousSentence}
               title="جمله قبلی"
@@ -1052,7 +1042,6 @@ export default function MoviePluss() {
               )}
             </IconButton>
 
-            {/* فقط جای دکمه بعدی به سمت راست منتقل شده است */}
             <IconButton
               onClick={nextSentence}
               title="جمله بعدی"
@@ -1181,10 +1170,16 @@ export default function MoviePluss() {
                 ref={cardsRef}
                 style={{
                   display: "flex",
+                  flexDirection: "row",
                   gap: 10,
                   overflowX: "auto",
                   paddingBottom: 10,
-                  direction: "ltr",
+
+                  /*
+                   * کارت‌ها از سمت راست به چپ نمایش داده می‌شوند.
+                   * کارت اول در سمت راست قرار می‌گیرد.
+                   */
+                  direction: "rtl",
                 }}
               >
                 {cues.map((cue, index) => (
@@ -1209,6 +1204,7 @@ export default function MoviePluss() {
                           ? COLORS.active
                           : COLORS.card,
                       cursor: "pointer",
+                      direction: "rtl",
                     }}
                   >
                     <div
@@ -1235,6 +1231,8 @@ export default function MoviePluss() {
                           color: COLORS.yellow,
                           fontSize: 12.5,
                           lineHeight: 1.45,
+                          direction: "ltr",
+                          textAlign: "left",
                         }}
                       >
                         {renderEnglish(
@@ -1251,6 +1249,7 @@ export default function MoviePluss() {
                           color: COLORS.teal,
                           fontSize: 12.5,
                           lineHeight: 1.5,
+                          textAlign: "right",
                         }}
                       >
                         {cue.fa}
