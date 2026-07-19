@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import "vazirmatn/Vazirmatn-font-face.css";
 import {
   Play,
@@ -16,7 +22,6 @@ import {
   ChevronUp,
 } from "lucide-react";
 
-// ---------- design tokens ----------
 const C = {
   bg: "#101219",
   panel: "#181B25",
@@ -36,7 +41,6 @@ const ENCODINGS = [
   { value: "windows-1252", label: "Windows-1252" },
 ];
 
-// ---------- subtitle helpers ----------
 function timeToSeconds(value) {
   const normalized = value.trim().replace(",", ".");
   const parts = normalized.split(":").map(Number);
@@ -68,14 +72,19 @@ function parseSubtitleText(raw) {
 
   for (const block of blocks) {
     const lines = block.split("\n");
-    const timeLineIndex = lines.findIndex((line) => line.includes("-->"));
+    const timeLineIndex = lines.findIndex((line) =>
+      line.includes("-->")
+    );
 
     if (timeLineIndex === -1) continue;
 
-    const [startRaw, endRaw] = lines[timeLineIndex].split("-->");
+    const [startRaw, endRaw] =
+      lines[timeLineIndex].split("-->");
 
     const start = timeToSeconds(startRaw);
-    const end = timeToSeconds((endRaw || "").trim().split(/\s+/)[0]);
+    const end = timeToSeconds(
+      (endRaw || "").trim().split(/\s+/)[0]
+    );
 
     const content = lines
       .slice(timeLineIndex + 1)
@@ -83,7 +92,9 @@ function parseSubtitleText(raw) {
       .replace(/<[^>]+>/g, "")
       .trim();
 
-    if (!content || Number.isNaN(start) || Number.isNaN(end)) continue;
+    if (!content || Number.isNaN(start) || Number.isNaN(end)) {
+      continue;
+    }
 
     cues.push({
       start,
@@ -124,15 +135,20 @@ function formatTime(seconds) {
   const minutes = Math.floor(seconds / 60);
   const sec = Math.floor(seconds % 60);
 
-  return `${String(minutes).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return `${String(minutes).padStart(2, "0")}:${String(
+    sec
+  ).padStart(2, "0")}`;
 }
 
-// ---------- file decoding ----------
 function decodeBuffer(buffer, encoding) {
   try {
-    return new TextDecoder(encoding, { fatal: false }).decode(buffer);
+    return new TextDecoder(encoding, {
+      fatal: false,
+    }).decode(buffer);
   } catch {
-    return new TextDecoder("utf-8", { fatal: false }).decode(buffer);
+    return new TextDecoder("utf-8", {
+      fatal: false,
+    }).decode(buffer);
   }
 }
 
@@ -148,7 +164,8 @@ async function decodeAuto(file) {
     fatal: false,
   }).decode(buffer);
 
-  const replacementCount = (utf8Text.match(/\uFFFD/g) || []).length;
+  const replacementCount = (utf8Text.match(/\uFFFD/g) || [])
+    .length;
 
   if (replacementCount > 3) {
     return {
@@ -157,19 +174,27 @@ async function decodeAuto(file) {
     };
   }
 
-  const hasArabic = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(
-    utf8Text
-  );
-
-  if (!hasArabic && buffer.byteLength > 50) {
-    const hasHighBytes = Array.from(new Uint8Array(buffer)).some(
-      (byte) => byte > 0x7f
+  const hasArabic =
+    /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(
+      utf8Text
     );
 
-    if (hasHighBytes) {
-      const windowsText = decodeBuffer(buffer, "windows-1256");
+  if (!hasArabic && buffer.byteLength > 50) {
+    const hasHighBytes = Array.from(
+      new Uint8Array(buffer)
+    ).some((byte) => byte > 0x7f);
 
-      if (/[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(windowsText)) {
+    if (hasHighBytes) {
+      const windowsText = decodeBuffer(
+        buffer,
+        "windows-1256"
+      );
+
+      if (
+        /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(
+          windowsText
+        )
+      ) {
         return {
           text: windowsText,
           encoding: "windows-1256",
@@ -184,7 +209,6 @@ async function decodeAuto(file) {
   };
 }
 
-// ---------- main component ----------
 export default function MoviePluss() {
   const [videoUrl, setVideoUrl] = useState(null);
   const [videoName, setVideoName] = useState("");
@@ -216,17 +240,14 @@ export default function MoviePluss() {
 
   const videoRef = useRef(null);
   const stripRef = useRef(null);
-  const translationCache = useRef({});
 
-  // Refs مربوط به کنترل دقیق seek و repeat
+  const translationCache = useRef({});
   const cuesRef = useRef([]);
   const currentIndexRef = useRef(-1);
   const repeatRef = useRef(true);
 
   const seekingRef = useRef(false);
   const userSeekingRef = useRef(false);
-
-  // مشخص می‌کند بعد از seek باید پخش ادامه پیدا کند یا خیر
   const playAfterSeekRef = useRef(false);
 
   useEffect(() => {
@@ -251,7 +272,6 @@ export default function MoviePluss() {
     [faText]
   );
 
-  // آزادسازی URL ویدیو
   useEffect(() => {
     return () => {
       if (videoUrl) {
@@ -260,7 +280,6 @@ export default function MoviePluss() {
     };
   }, [videoUrl]);
 
-  // ---------- file handlers ----------
   const onVideoFile = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -326,7 +345,6 @@ export default function MoviePluss() {
     currentIndexRef.current = -1;
   }, [enText, faText]);
 
-  // ---------- play / seek ----------
   const playVideo = async () => {
     const video = videoRef.current;
     if (!video) return;
@@ -358,14 +376,6 @@ export default function MoviePluss() {
     }
   };
 
-  /*
-   * انجام seek به ابتدای کارت.
-   *
-   * نکته مهم:
-   * تا زمانی که رویداد seeked دریافت نشده، onTimeUpdate اجازه
-   * اجرای منطق repeat را ندارد. به همین دلیل پخش چند میلی‌ثانیه‌ای
-   * و توقف ناگهانی اتفاق نمی‌افتد.
-   */
   const jumpTo = (index, autoplay = true) => {
     const video = videoRef.current;
     const cue = cuesRef.current[index];
@@ -405,17 +415,6 @@ export default function MoviePluss() {
     }
   };
 
-  /*
-   * منطق اصلی پخش:
-   *
-   * در حالت repeat:
-   * - کارت انتخاب‌شده قفل می‌ماند.
-   * - پخش تا start کارت بعدی ادامه پیدا می‌کند.
-   * - سپس به start کارت فعلی برمی‌گردد.
-   *
-   * برای آخرین کارت، چون کارت بعدی وجود ندارد،
-   * از end همان کارت به‌عنوان مرز استفاده می‌شود.
-   */
   const onTimeUpdate = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -423,10 +422,7 @@ export default function MoviePluss() {
     const time = video.currentTime;
     setCurrent(time);
 
-    // هنگام seek هیچ منطق دیگری اجرا نشود
     if (seekingRef.current) return;
-
-    // هنگام کشیدن دستی progress
     if (userSeekingRef.current) return;
 
     const list = cuesRef.current;
@@ -440,18 +436,10 @@ export default function MoviePluss() {
       const currentCue = list[lockedIndex];
       const nextCue = list[lockedIndex + 1];
 
-      // مرز صحیح تکرار: ابتدای کارت بعدی
       const repeatBoundary = nextCue
         ? nextCue.start
         : currentCue.end;
 
-      /*
-       * فقط زمانی loop انجام بده که ویدیو واقعاً داخل
-       * محدوده کارت انتخاب‌شده باشد.
-       *
-       * این شرط از seek اشتباه در لحظه کلیک روی کارت
-       * جلوگیری می‌کند.
-       */
       if (
         time >= repeatBoundary - 0.04 &&
         time >= currentCue.start - 0.1
@@ -467,7 +455,6 @@ export default function MoviePluss() {
       return;
     }
 
-    // حالت عادی، وقتی repeat خاموش است
     let detectedIndex = -1;
 
     for (let i = 0; i < list.length; i++) {
@@ -488,11 +475,6 @@ export default function MoviePluss() {
     }
   };
 
-  /*
-   * بعد از کامل‌شدن seek:
-   * اگر کلیک روی کارت یا loop باعث seek شده باشد،
-   * پخش مجدداً شروع می‌شود.
-   */
   const onSeeked = () => {
     const video = videoRef.current;
     if (!video || !seekingRef.current) return;
@@ -507,7 +489,6 @@ export default function MoviePluss() {
     }
   };
 
-  // ---------- progress handlers ----------
   const onProgressMouseDown = () => {
     userSeekingRef.current = true;
     seekingRef.current = false;
@@ -534,7 +515,6 @@ export default function MoviePluss() {
     }, 150);
   };
 
-  // ---------- playback rate ----------
   useEffect(() => {
     const video = videoRef.current;
 
@@ -543,7 +523,6 @@ export default function MoviePluss() {
     }
   }, [rate, videoUrl]);
 
-  // ---------- scroll active card ----------
   useEffect(() => {
     if (currentIndex === -1 || !stripRef.current) return;
 
@@ -560,12 +539,14 @@ export default function MoviePluss() {
     }
   }, [currentIndex]);
 
-  // ---------- keyboard ----------
   useEffect(() => {
     const handler = (event) => {
       const tagName = document.activeElement?.tagName;
 
-      if (tagName === "TEXTAREA" || tagName === "INPUT") return;
+      if (tagName === "TEXTAREA" || tagName === "INPUT") {
+        return;
+      }
+
       if (!videoRef.current) return;
 
       if (event.code === "Space") {
@@ -573,12 +554,17 @@ export default function MoviePluss() {
         playPause();
       }
 
-      if (event.code === "ArrowRight") {
+      /*
+       * جهت فلش‌ها به‌صورت کامل جابه‌جا شده است:
+       * فلش چپ = جمله بعدی
+       * فلش راست = جمله قبلی
+       */
+      if (event.code === "ArrowLeft") {
         event.preventDefault();
         nextSentence();
       }
 
-      if (event.code === "ArrowLeft") {
+      if (event.code === "ArrowRight") {
         event.preventDefault();
         previousSentence();
       }
@@ -596,7 +582,6 @@ export default function MoviePluss() {
     };
   });
 
-  // ---------- word translation ----------
   const handleWordClick = async (rawWord) => {
     const word = rawWord.replace(/[^A-Za-z'-]/g, "");
 
@@ -629,7 +614,8 @@ export default function MoviePluss() {
       const data = await response.json();
 
       const translation =
-        data?.responseData?.translatedText || "ترجمه یافت نشد";
+        data?.responseData?.translatedText ||
+        "ترجمه یافت نشد";
 
       translationCache.current[key] = translation;
 
@@ -722,7 +708,6 @@ export default function MoviePluss() {
         }
       `}</style>
 
-      {/* header */}
       <header
         style={{
           display: "flex",
@@ -772,7 +757,6 @@ export default function MoviePluss() {
         </button>
       </header>
 
-      {/* upload panel */}
       {panelOpen && (
         <section
           style={{
@@ -862,7 +846,6 @@ export default function MoviePluss() {
             padding: 20,
           }}
         >
-          {/* video */}
           <div
             style={{
               position: "relative",
@@ -999,7 +982,6 @@ export default function MoviePluss() {
             )}
           </div>
 
-          {/* progress */}
           <input
             type="range"
             min={0}
@@ -1030,7 +1012,6 @@ export default function MoviePluss() {
             <span>{formatTime(duration)}</span>
           </div>
 
-          {/* controls */}
           <div
             style={{
               display: "flex",
@@ -1041,19 +1022,40 @@ export default function MoviePluss() {
               marginTop: 14,
             }}
           >
-            <IconButton onClick={nextSentence} title="جمله بعد">
-              <SkipForward size={18} />
+            {/*
+              چیدمان و عملکرد دکمه‌ها نیز کاملاً جابه‌جا شده است:
+
+              سمت چپ:
+              فلش چپ = جمله بعدی
+
+              سمت راست:
+              فلش راست = جمله قبلی
+            */}
+
+            <IconButton
+              onClick={nextSentence}
+              title="جمله بعدی"
+            >
+              <SkipBack size={18} />
             </IconButton>
 
-            <IconButton onClick={playPause} big title="پخش / توقف">
-              {isPlaying ? <Pause size={22} /> : <Play size={22} />}
+            <IconButton
+              onClick={playPause}
+              big
+              title="پخش / توقف"
+            >
+              {isPlaying ? (
+                <Pause size={22} />
+              ) : (
+                <Play size={22} />
+              )}
             </IconButton>
 
             <IconButton
               onClick={previousSentence}
-              title="جمله قبل"
+              title="جمله قبلی"
             >
-              <SkipBack size={18} />
+              <SkipForward size={18} />
             </IconButton>
 
             <IconButton
@@ -1142,7 +1144,6 @@ export default function MoviePluss() {
             />
           </div>
 
-          {/* cards */}
           {cues.length > 0 && (
             <section style={{ marginTop: 24 }}>
               <div
@@ -1242,7 +1243,6 @@ export default function MoviePluss() {
   );
 }
 
-// ---------- sub components ----------
 function SubtitleUploader({
   title,
   language,
@@ -1289,6 +1289,7 @@ function SubtitleUploader({
           accept=".srt,.vtt,text/plain"
           onChange={(event) => {
             const selectedFile = event.target.files?.[0];
+
             if (selectedFile) {
               onFile(selectedFile, language);
             }
@@ -1341,7 +1342,8 @@ function SubtitleUploader({
           outline: "none",
           background: C.card,
           color: C.text,
-          fontFamily: language === "en" ? "monospace" : "inherit",
+          fontFamily:
+            language === "en" ? "monospace" : "inherit",
           fontSize: 12,
         }}
       />
