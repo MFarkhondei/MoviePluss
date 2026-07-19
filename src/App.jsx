@@ -837,7 +837,7 @@ export default function MoviePluss() {
   ]);
 
   return (
-    <div dir="rtl" className="movie-pluss">
+    <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
       <style>{`
         * {
           box-sizing: border-box;
@@ -847,13 +847,14 @@ export default function MoviePluss() {
           margin: 0;
           background: ${COLORS.bg};
           overflow-x: hidden;
+          font-family: 'Vazirmatn', sans-serif;
         }
 
         button,
         input,
         textarea,
         select {
-          font-family: inherit;
+          font-family: 'Vazirmatn', sans-serif;
         }
 
         input[type="range"] {
@@ -1000,7 +1001,6 @@ export default function MoviePluss() {
           background: ${COLORS.muted};
         }
 
-        /* حالت تمام صفحه برای بخش کارت‌ها */
         .movie-player:fullscreen + .cards-section {
           position: absolute;
           bottom: 100px;
@@ -1021,6 +1021,46 @@ export default function MoviePluss() {
         .movie-player:fullscreen + .cards-section .cards-container .subtitle-card {
           min-width: 200px;
           max-width: 200px;
+        }
+
+        /* استایل جدید برای بخش آپلود فایل‌ها */
+        .upload-section {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr auto;
+          gap: 14px;
+          padding: 20px;
+          background: ${COLORS.panel};
+          border-bottom: 1px solid ${COLORS.border};
+          align-items: stretch;
+        }
+
+        .upload-section > * {
+          min-height: 42px;
+        }
+
+        .upload-section .apply-btn {
+          align-self: stretch;
+          min-height: 100%;
+          border: none;
+          border-radius: 8px;
+          background: ${COLORS.yellow};
+          color: #171717;
+          font-weight: 800;
+          cursor: pointer;
+          font-family: 'Vazirmatn', sans-serif;
+          font-size: 14px;
+          padding: 0 20px;
+          transition: all 0.2s ease;
+          letter-spacing: 0.5px;
+        }
+
+        .upload-section .apply-btn:hover {
+          transform: scale(1.02);
+          box-shadow: 0 4px 15px rgba(242, 201, 76, 0.3);
+        }
+
+        .upload-section .apply-btn:active {
+          transform: scale(0.98);
         }
       `}</style>
 
@@ -1077,17 +1117,7 @@ export default function MoviePluss() {
       </header>
 
       {filesOpen && (
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(230px, 1fr))",
-            gap: 14,
-            padding: 20,
-            background: COLORS.panel,
-            borderBottom: `1px solid ${COLORS.border}`,
-          }}
-        >
+        <section className="upload-section">
           <label style={uploadBoxStyle()}>
             <Film size={18} color={COLORS.yellow} />
             {videoName || "انتخاب فایل ویدیو"}
@@ -1103,7 +1133,6 @@ export default function MoviePluss() {
           </label>
 
           <SubtitleInput
-            title="زیرنویس انگلیسی"
             language="en"
             file={englishFile}
             text={englishText}
@@ -1115,7 +1144,6 @@ export default function MoviePluss() {
           />
 
           <SubtitleInput
-            title="زیرنویس فارسی"
             language="fa"
             file={persianFile}
             text={persianText}
@@ -1128,16 +1156,7 @@ export default function MoviePluss() {
 
           <button
             onClick={applySubtitles}
-            style={{
-              alignSelf: "end",
-              minHeight: 42,
-              border: "none",
-              borderRadius: 8,
-              background: COLORS.yellow,
-              color: "#171717",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
+            className="apply-btn"
           >
             اعمال زیرنویس‌ها
           </button>
@@ -1172,6 +1191,7 @@ export default function MoviePluss() {
                 gap: 12,
                 color: COLORS.muted,
                 cursor: "pointer",
+                fontFamily: "'Vazirmatn', sans-serif",
               }}
             >
               <CirclePlay size={50} color={COLORS.yellow} />
@@ -1231,6 +1251,7 @@ export default function MoviePluss() {
                       background: "rgba(12,14,20,.97)",
                       boxShadow:
                         "0 10px 35px rgba(0,0,0,.5)",
+                      fontFamily: "'Vazirmatn', sans-serif",
                     }}
                   >
                     <div
@@ -1340,6 +1361,7 @@ export default function MoviePluss() {
                         textAlign: "center",
                         direction: "ltr",
                         pointerEvents: "auto",
+                        fontFamily: "'Vazirmatn', sans-serif",
                       }}
                     >
                       {renderEnglish(activeCue.en, "overlay")}
@@ -1363,6 +1385,7 @@ export default function MoviePluss() {
                           (subtitleSize / 100)}px`,
                         fontWeight: 700,
                         textAlign: "center",
+                        fontFamily: "'Vazirmatn', sans-serif",
                       }}
                     >
                       {activeCue.fa}
@@ -1476,6 +1499,7 @@ export default function MoviePluss() {
                       color: COLORS.text,
                       fontSize: 11,
                       direction: "ltr",
+                      fontFamily: "'Vazirmatn', sans-serif",
                     }}
                   >
                     {formatTime(currentTime)} /{" "}
@@ -1500,6 +1524,7 @@ export default function MoviePluss() {
                         value={speed}
                         style={{
                           background: COLORS.card,
+                          fontFamily: "'Vazirmatn', sans-serif",
                         }}
                       >
                         {speed}x
@@ -1532,6 +1557,7 @@ export default function MoviePluss() {
                         : COLORS.text,
                       fontSize: 11,
                       cursor: "pointer",
+                      fontFamily: "'Vazirmatn', sans-serif",
                     }}
                   >
                     <RotateCw size={15} />
@@ -1589,6 +1615,7 @@ export default function MoviePluss() {
                     border: `1px solid ${COLORS.border}`,
                     borderRadius: 10,
                     background: "rgba(20,23,31,.97)",
+                    fontFamily: "'Vazirmatn', sans-serif",
                   }}
                   onClick={(event) =>
                     event.stopPropagation()
@@ -1666,6 +1693,7 @@ export default function MoviePluss() {
                 marginBottom: 9,
                 color: COLORS.muted,
                 fontSize: 12,
+                fontFamily: "'Vazirmatn', sans-serif",
               }}
             >
               <span>کارت‌ها ({cues.length})</span>
@@ -1702,6 +1730,7 @@ export default function MoviePluss() {
                         : COLORS.card,
                     cursor: "pointer",
                     direction: "rtl",
+                    fontFamily: "'Vazirmatn', sans-serif",
                   }}
                 >
                   <div
@@ -1758,7 +1787,6 @@ export default function MoviePluss() {
 }
 
 function SubtitleInput({
-  title,
   language,
   file,
   text,
@@ -1768,24 +1796,17 @@ function SubtitleInput({
   onText,
   onEncoding,
 }) {
-  return (
-    <div>
-      <div
-        style={{
-          marginBottom: 6,
-          color: COLORS.muted,
-          fontSize: 12,
-        }}
-      >
-        {title}
-      </div>
+  const label = language === "en" ? "زیرنویس انگلیسی" : "زیرنویس فارسی";
+  const placeholder = language === "en" ? "متن زیرنویس انگلیسی را وارد کنید..." : "متن زیرنویس فارسی را وارد کنید...";
+  const dir = language === "fa" ? "rtl" : "ltr";
 
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <label
         style={{
           display: "flex",
           alignItems: "center",
           gap: 7,
-          marginBottom: 6,
           padding: "8px 10px",
           border: `1px dashed ${COLORS.border}`,
           borderRadius: 8,
@@ -1793,10 +1814,12 @@ function SubtitleInput({
           color: COLORS.text,
           fontSize: 11,
           cursor: "pointer",
+          fontFamily: "'Vazirmatn', sans-serif",
+          minHeight: 42,
         }}
       >
         <Subtitles size={15} color={color} />
-        {file?.name || "انتخاب فایل زیرنویس"}
+        <span style={{ flex: 1 }}>{file?.name || label}</span>
 
         <input
           type="file"
@@ -1808,43 +1831,46 @@ function SubtitleInput({
         />
       </label>
 
-      <select
-        value={encoding}
-        onChange={(event) =>
-          onEncoding(language, event.target.value)
-        }
-        style={selectStyle(true)}
-      >
-        {ENCODINGS.map((item) => (
-          <option
-            key={item.value}
-            value={item.value}
-            style={{ background: COLORS.card }}
-          >
-            {item.label}
-          </option>
-        ))}
-      </select>
+      <div style={{ display: "flex", gap: 6 }}>
+        <select
+          value={encoding}
+          onChange={(event) =>
+            onEncoding(language, event.target.value)
+          }
+          style={selectStyle(true)}
+        >
+          {ENCODINGS.map((item) => (
+            <option
+              key={item.value}
+              value={item.value}
+              style={{ background: COLORS.card, fontFamily: "'Vazirmatn', sans-serif" }}
+            >
+              {item.label}
+            </option>
+          ))}
+        </select>
 
-      <textarea
-        value={text}
-        onChange={(event) => onText(event.target.value)}
-        placeholder="متن زیرنویس را وارد کنید..."
-        dir={language === "fa" ? "rtl" : "ltr"}
-        style={{
-          width: "100%",
-          height: 65,
-          resize: "vertical",
-          padding: 8,
-          marginTop: 6,
-          border: `1px solid ${COLORS.border}`,
-          borderRadius: 8,
-          outline: "none",
-          background: COLORS.card,
-          color: COLORS.text,
-          fontSize: 11,
-        }}
-      />
+        <textarea
+          value={text}
+          onChange={(event) => onText(event.target.value)}
+          placeholder={placeholder}
+          dir={dir}
+          style={{
+            flex: 1,
+            height: 36,
+            resize: "none",
+            padding: "6px 8px",
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: 8,
+            outline: "none",
+            background: COLORS.card,
+            color: COLORS.text,
+            fontSize: 11,
+            fontFamily: "'Vazirmatn', sans-serif",
+            minHeight: 36,
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -1857,6 +1883,7 @@ function SettingRange({ label, value, min, max, onChange }) {
         marginBottom: 12,
         color: COLORS.text,
         fontSize: 11,
+        fontFamily: "'Vazirmatn', sans-serif",
       }}
     >
       <div
@@ -1909,6 +1936,7 @@ function ControlButton({
           : "rgba(0,0,0,.3)",
         color: active ? COLORS.yellow : COLORS.text,
         cursor: "pointer",
+        fontFamily: "'Vazirmatn', sans-serif",
       }}
     >
       {children}
@@ -1927,6 +1955,7 @@ function buttonStyle() {
     background: COLORS.card,
     color: COLORS.text,
     cursor: "pointer",
+    fontFamily: "'Vazirmatn', sans-serif",
   };
 }
 
@@ -1943,6 +1972,7 @@ function uploadBoxStyle() {
     color: COLORS.text,
     fontSize: 12,
     cursor: "pointer",
+    fontFamily: "'Vazirmatn', sans-serif",
   };
 }
 
@@ -1958,5 +1988,6 @@ function selectStyle(full = false) {
     color: COLORS.text,
     fontSize: 11,
     cursor: "pointer",
+    fontFamily: "'Vazirmatn', sans-serif",
   };
 }
