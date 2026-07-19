@@ -92,11 +92,7 @@ function parseSubtitleText(raw = "") {
         return null;
       }
 
-      return {
-        start,
-        end,
-        text,
-      };
+      return { start, end, text };
     })
     .filter(Boolean)
     .sort((a, b) => a.start - b.start);
@@ -105,7 +101,6 @@ function parseSubtitleText(raw = "") {
 function mergeSubtitles(englishText, persianText) {
   const english = parseSubtitleText(englishText);
   const persian = parseSubtitleText(persianText);
-
   const count = Math.max(english.length, persian.length);
 
   return Array.from({ length: count }, (_, index) => {
@@ -149,7 +144,6 @@ async function decodeFile(file, encoding) {
 
 async function autoDecodeFile(file) {
   const buffer = await file.arrayBuffer();
-
   const utf8Text = new TextDecoder("utf-8").decode(buffer);
   const replacementCount = (
     utf8Text.match(/\uFFFD/g) || []
@@ -232,9 +226,7 @@ export default function MoviePluss() {
 
   useEffect(() => {
     return () => {
-      if (videoUrl) {
-        URL.revokeObjectURL(videoUrl);
-      }
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
     };
   }, [videoUrl]);
 
@@ -280,29 +272,23 @@ export default function MoviePluss() {
     }
   }, [playVideo, pauseVideo]);
 
-  const jumpToCue = useCallback(
-    (index, autoplay = true) => {
-      const video = videoRef.current;
-      const cue = cuesRef.current[index];
+  const jumpToCue = useCallback((index, autoplay = true) => {
+    const video = videoRef.current;
+    const cue = cuesRef.current[index];
 
-      if (!video || !cue) return;
+    if (!video || !cue) return;
 
-      currentIndexRef.current = index;
-      setCurrentIndex(index);
-      setWordPopup(null);
+    currentIndexRef.current = index;
+    setCurrentIndex(index);
+    setWordPopup(null);
 
-      seekingRef.current = true;
-      userSeekingRef.current = false;
-      playAfterSeekRef.current = autoplay;
+    seekingRef.current = true;
+    userSeekingRef.current = false;
+    playAfterSeekRef.current = autoplay;
 
-      video.currentTime = cue.start;
-    },
-    []
-  );
+    video.currentTime = cue.start;
+  }, []);
 
-  /*
-   * دکمه سمت چپ: کارت بعدی
-   */
   const nextSentence = useCallback(() => {
     const nextIndex = currentIndexRef.current + 1;
 
@@ -311,9 +297,6 @@ export default function MoviePluss() {
     }
   }, [jumpToCue]);
 
-  /*
-   * دکمه سمت راست: کارت قبلی
-   */
   const previousSentence = useCallback(() => {
     const previousIndex = currentIndexRef.current - 1;
 
@@ -336,9 +319,7 @@ export default function MoviePluss() {
     const time = video.currentTime;
     setCurrentTime(time);
 
-    if (seekingRef.current || userSeekingRef.current) {
-      return;
-    }
+    if (seekingRef.current || userSeekingRef.current) return;
 
     const list = cuesRef.current;
     const lockedIndex = currentIndexRef.current;
@@ -395,9 +376,7 @@ export default function MoviePluss() {
 
     if (!file) return;
 
-    if (videoUrl) {
-      URL.revokeObjectURL(videoUrl);
-    }
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
 
     setVideoUrl(URL.createObjectURL(file));
     setVideoName(file.name);
@@ -995,11 +974,6 @@ export default function MoviePluss() {
             <span>{formatTime(duration)}</span>
           </div>
 
-          {/*
-            direction: rtl باعث می‌شود:
-            - دکمه قبلی در سمت راست باشد
-            - دکمه بعدی در سمت چپ باشد
-          */}
           <div
             style={{
               display: "flex",
@@ -1011,12 +985,18 @@ export default function MoviePluss() {
               direction: "rtl",
             }}
           >
-            {/* سمت راست: کارت قبلی */}
+            {/*
+              فقط شکل آیکون‌ها برعکس شده است.
+              عملکرد و جای دکمه‌ها بدون تغییر باقی مانده:
+              سمت راست = کارت قبلی
+              سمت چپ = کارت بعدی
+            */}
+
             <IconButton
               onClick={previousSentence}
               title="کارت قبلی"
             >
-              <SkipBack size={18} />
+              <SkipForward size={18} />
             </IconButton>
 
             <IconButton
@@ -1031,12 +1011,11 @@ export default function MoviePluss() {
               )}
             </IconButton>
 
-            {/* سمت چپ: کارت بعدی */}
             <IconButton
               onClick={nextSentence}
               title="کارت بعدی"
             >
-              <SkipForward size={18} />
+              <SkipBack size={18} />
             </IconButton>
 
             <IconButton
@@ -1156,7 +1135,6 @@ export default function MoviePluss() {
                 کارت کلیک کنید
               </div>
 
-              {/* کارت‌ها از سمت راست به سمت چپ قرار می‌گیرند */}
               <div
                 ref={cardsRef}
                 style={{
