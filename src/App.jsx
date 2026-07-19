@@ -60,11 +60,9 @@ function timeToSeconds(value = "") {
 function parseSubtitleText(raw = "") {
   if (!raw.trim()) return [];
 
-  const content = raw
+  return raw
     .replace(/\r/g, "")
-    .replace(/^WEBVTT.*\n+/i, "");
-
-  return content
+    .replace(/^WEBVTT.*\n+/i, "")
     .split(/\n\s*\n/)
     .map((block) => block.trim())
     .filter(Boolean)
@@ -257,15 +255,13 @@ export default function MoviePluss() {
   useEffect(() => {
     if (currentIndex < 0 || !cardsRef.current) return;
 
-    const activeCard = cardsRef.current.querySelector(
-      `[data-frame="${currentIndex}"]`
-    );
-
-    activeCard?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "center",
-    });
+    cardsRef.current
+      .querySelector(`[data-frame="${currentIndex}"]`)
+      ?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
   }, [currentIndex]);
 
   const playVideo = useCallback(async () => {
@@ -289,11 +285,7 @@ export default function MoviePluss() {
   const togglePlay = useCallback(() => {
     if (!videoRef.current) return;
 
-    if (videoRef.current.paused) {
-      playVideo();
-    } else {
-      pauseVideo();
-    }
+    videoRef.current.paused ? playVideo() : pauseVideo();
   }, [playVideo, pauseVideo]);
 
   const toggleFullscreen = useCallback(async () => {
@@ -327,7 +319,6 @@ export default function MoviePluss() {
     video.currentTime = cue.start;
   }, []);
 
-  // دکمه سمت چپ: کارت بعدی
   const nextSentence = useCallback(() => {
     const nextIndex = currentIndexRef.current + 1;
 
@@ -336,7 +327,6 @@ export default function MoviePluss() {
     }
   }, [jumpToCue]);
 
-  // دکمه سمت راست: کارت قبلی
   const previousSentence = useCallback(() => {
     const previousIndex = currentIndexRef.current - 1;
 
@@ -467,12 +457,10 @@ export default function MoviePluss() {
   };
 
   const applySubtitles = () => {
-    const merged = mergeSubtitles(
-      englishText,
-      persianText
+    setCues(
+      mergeSubtitles(englishText, persianText)
     );
 
-    setCues(merged);
     setCurrentIndex(-1);
     currentIndexRef.current = -1;
   };
@@ -492,11 +480,9 @@ export default function MoviePluss() {
 
     if (!video) return;
 
-    const targetTime = Number(event.target.value);
-
     seekingRef.current = true;
     playAfterSeekRef.current = !video.paused;
-    video.currentTime = targetTime;
+    video.currentTime = Number(event.target.value);
 
     setTimeout(() => {
       userSeekingRef.current = false;
@@ -613,10 +599,6 @@ export default function MoviePluss() {
         event.preventDefault();
         toggleFullscreen();
       }
-
-      if (event.code === "Escape" && document.fullscreenElement) {
-        document.exitFullscreen();
-      }
     };
 
     window.addEventListener("keydown", handleKeyboard);
@@ -696,12 +678,6 @@ export default function MoviePluss() {
 
         .frame-card:hover {
           border-color: ${COLORS.yellow} !important;
-        }
-
-        .fullscreen-player {
-          width: 100%;
-          height: auto;
-          background: #000;
         }
 
         .fullscreen-player:fullscreen {
@@ -1108,40 +1084,7 @@ export default function MoviePluss() {
               direction: "rtl",
             }}
           >
-            {/* سمت راست: کارت قبلی — فقط شکل فلش برعکس شده */}
-            <IconButton
-              onClick={previousSentence}
-              title="کارت قبلی"
-            >
-              <SkipForward size={18} />
-            </IconButton>
-
-            <IconButton
-              onClick={togglePlay}
-              title="پخش / توقف"
-              large
-            >
-              {isPlaying ? (
-                <Pause size={22} />
-              ) : (
-                <Play size={22} />
-              )}
-            </IconButton>
-
-            {/* سمت چپ: کارت بعدی — فقط شکل فلش برعکس شده */}
-            <IconButton
-              onClick={nextSentence}
-              title="کارت بعدی"
-            >
-              <SkipBack size={18} />
-            </IconButton>
-
-            <IconButton
-              onClick={replaySentence}
-              title="شروع مجدد کارت"
-            >
-              <RotateCcw size={18} />
-            </IconButton>
+            {/* دکمه‌های تکرار جمله و سرعت به سمت راست کلیدهای کنترل منتقل شدند */}
 
             <button
               onClick={() => setRepeatOn((value) => !value)}
@@ -1220,6 +1163,41 @@ export default function MoviePluss() {
                 )}
               </select>
             </div>
+
+            {/* سمت راست: کارت قبلی؛ شکل فلش همچنان برعکس است */}
+            <IconButton
+              onClick={previousSentence}
+              title="کارت قبلی"
+            >
+              <SkipForward size={18} />
+            </IconButton>
+
+            <IconButton
+              onClick={togglePlay}
+              title="پخش / توقف"
+              large
+            >
+              {isPlaying ? (
+                <Pause size={22} />
+              ) : (
+                <Play size={22} />
+              )}
+            </IconButton>
+
+            {/* سمت چپ: کارت بعدی؛ شکل فلش همچنان برعکس است */}
+            <IconButton
+              onClick={nextSentence}
+              title="کارت بعدی"
+            >
+              <SkipBack size={18} />
+            </IconButton>
+
+            <IconButton
+              onClick={replaySentence}
+              title="شروع مجدد کارت"
+            >
+              <RotateCcw size={18} />
+            </IconButton>
 
             <ToggleButton
               label="EN"
