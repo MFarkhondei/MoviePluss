@@ -275,8 +275,17 @@ export default function MoviePluss() {
 
   const suppressOutsideClickRef = useRef(false);
 
-  // ===== ذخیره آخرین زمان مشاهده
+  // ذخیره آخرین زمان مشاهده (قبلی)
   const savedTimeKeyRef = useRef(null);
+
+  // ===== Gesture controls روی صفحه ویدیو
+  const gestureRef = useRef({
+    pointerId: null,
+    startY: 0,
+    startVolume: 1,
+    basePlaybackRate: 1,
+    doubled: false,
+  });
 
   const dragStateRef = useRef({
     dragging: false,
@@ -309,7 +318,7 @@ export default function MoviePluss() {
   const [duration, setDuration] = useState(0);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume] = useState(1);
+  const [volume, setVolume] = useState(1);
 
   const [playbackRate, setPlaybackRate] = useState(1);
 
@@ -373,14 +382,13 @@ export default function MoviePluss() {
     localStorage.setItem(savedTimeKeyRef.current, String(videoRef.current.currentTime || 0));
   }, []);
 
-  // ذخیره هنگام خروج/ریلود
   useEffect(() => {
     const beforeUnload = () => saveCurrentTime();
     window.addEventListener("beforeunload", beforeUnload);
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, [saveCurrentTime]);
 
-  // ================== اسکرول خودکار کارت مثل قبل
+  // ================== اسکرول خودکار کارت
   useEffect(() => {
     if (dragStateRef.current.dragging) return;
     if (currentCue < 0 || !cardsRef.current) return;
@@ -394,12 +402,10 @@ export default function MoviePluss() {
     if (isVertical) {
       const targetTop =
         cardElement.offsetTop - containerEl.clientHeight / 2 + cardElement.offsetHeight / 2;
-
       containerEl.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
     } else {
       const targetLeft =
         cardElement.offsetLeft - containerEl.clientWidth / 2 + cardElement.offsetWidth / 2;
-
       containerEl.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
     }
   }, [currentCue, cardsLayout]);
@@ -528,7 +534,7 @@ export default function MoviePluss() {
     videoRef.current.volume = volume;
     videoRef.current.playbackRate = playbackRate;
 
-    // ✅ بازیابی آخرین زمان
+    // بازیابی آخرین زمان
     if (savedTimeKeyRef.current) {
       const saved = localStorage.getItem(savedTimeKeyRef.current);
       const t = saved ? Number(saved) : 0;
@@ -542,14 +548,12 @@ export default function MoviePluss() {
 
   const handleVideoFile = (file) => {
     if (!file) return;
-
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     const url = URL.createObjectURL(file);
 
     setVideoUrl(url);
     setVideoName(file.name);
 
-    // ✅ کلید با نام فایل
     savedTimeKeyRef.current = `moviepluss:lastTime:${file.name}`;
 
     setCurrentTime(0);
@@ -557,7 +561,6 @@ export default function MoviePluss() {
     setCurrentCue(-1);
     setIsPlaying(false);
     setWordPopup(null);
-
     currentCueRef.current = -1;
   };
 
@@ -796,6 +799,7 @@ export default function MoviePluss() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
 
+  // ================== Split drag (همان قبل با جهت درست)
   const onStartDrag = (e) => {
     const el = splitContainerRef.current;
     if (!el) return;
@@ -843,6 +847,58 @@ export default function MoviePluss() {
   const videoBasis = useMemo(() => `${(1 - cardsRatio) * 100}%`, [cardsRatio]);
   const cardsBasis = useMemo(() => `${cardsRatio * 100}%`, [cardsRatio]);
 
+  // ================== Gesture handlers روی ویدیو
+  const onVideoPointerDown = (e) => {
+    if (!videoRef.current) return;
+    // فقط تک‌لمس/پونتر اصلی
+    gestureRef.current.pointerId = e.pointerId;
+    gestureRef.current.startY = e.clientY;
+    gestureRef.current.startVolume = videoRef.current.volume ?? volume;
+    gestureRef.current.basePlaybackRate = playbackRate;
+    gestureRef.current.doubled = false;
+
+    try {
+      videoRef.current.setPointerCapture(e.pointerId);
+    } catch {}
+    // هر نوع نگه‌داشتن = دو برابر سرعت
+    // (طبق خواسته شما: "اگر انگشت روی صفحه فیلم نگه داشته شود سرعت دو برابر شود")
+    const doubled = playbackRate * 2;
+    videoRef.current.playbackRate = doubled;
+    gestureRef.current.doubled = true;
+
+    setControlsVisible(false);
+  };
+
+  const onVideoPointerMove = (e) => {
+    if (!videoRef.current) return;
+    if (gestureRef.current.pointerId !== e.pointerId) return;
+
+    const dy = e.clientY - gestureRef.current.startY;
+
+    // بالا => صدا زیاد شود (dy منفی => زیاد)
+    // پایین => صدا کم شود (dy مثبت => کم)
+    // ضریب تنظیم:
+    const step = 0.0025; // حساسیت
+    let nextVol = gestureRef.current.startVolume - dy * step;
+
+    nextVol = Math.max(0, Math.min(1, nextVol));
+    videoRef.current.volume = nextVol;
+    setVolume(nextVol);
+  };
+
+  const endGesture = (e) => {
+    if (!videoRef.current) return;
+    if (gestureRef.current.pointerId !== e.pointerId) return;
+
+    // برگرداندن سرعت به حالت قبل
+    videoRef.current.playbackRate = playbackRate;
+    gestureRef.current.pointerId = null;
+    gestureRef.current.doubled = false;
+
+    setControlsVisible(true);
+    showControlsTemporarily();
+  };
+
   return (
     <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
       <style>{`
@@ -886,7 +942,7 @@ export default function MoviePluss() {
           display: block;
           object-fit: contain;
           background: #000;
-          touch-action: pan-y;
+          touch-action: none; /* ✅ مهم برای gesture */
         }
 
         .split-handle {
@@ -1189,11 +1245,17 @@ export default function MoviePluss() {
                       saveCurrentTime();
                     }}
                     onDoubleClick={toggleFullscreen}
+                    // قبلاً روی click پلیر استارت/توقف داشتید؛ اینجا حفظ می‌شود
                     onClick={togglePlay}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                     }}
+                    // ✅ gestureها
+                    onPointerDown={onVideoPointerDown}
+                    onPointerMove={onVideoPointerMove}
+                    onPointerUp={endGesture}
+                    onPointerCancel={endGesture}
                     style={{ filter: `brightness(${brightness}%)` }}
                   />
 
@@ -1464,7 +1526,6 @@ export default function MoviePluss() {
                     )}
                   </div>
 
-                  {/* overlay */}
                   {activeCue && (
                     <div
                       style={{
@@ -1524,16 +1585,11 @@ export default function MoviePluss() {
 
                 <div className="split-handle" onPointerDown={onStartDrag} title="تغییر ارتفاع" />
 
-                {/* Cards */}
                 <section
                   className={`cards-section ${
                     cardsLayout === "vertical" ? "cards-section-vertical" : "cards-section-horizontal"
                   }`}
-                  style={{
-                    flex: `0 0 ${cardsBasis}`,
-                    height: cardsBasis,
-                    minHeight: 0,
-                  }}
+                  style={{ flex: `0 0 ${cardsBasis}`, height: cardsBasis, minHeight: 0 }}
                 >
                   <div className="cards-header">
                     <span>کارت‌ها ({cues.length})</span>
@@ -1696,4 +1752,51 @@ export default function MoviePluss() {
       </main>
     </div>
   );
+
+  function onVideoPointerDown(e) {
+    if (!videoRef.current) return;
+
+    gestureRef.current.pointerId = e.pointerId;
+    gestureRef.current.startY = e.clientY;
+    gestureRef.current.startVolume = videoRef.current.volume ?? volume;
+    gestureRef.current.basePlaybackRate = playbackRate;
+    gestureRef.current.doubled = true;
+
+    try {
+      videoRef.current.setPointerCapture(e.pointerId);
+    } catch {}
+
+    // نگه داشتن = دو برابر سرعت
+    videoRef.current.playbackRate = playbackRate * 2;
+    setControlsVisible(false);
+  }
+
+  function onVideoPointerMove(e) {
+    if (!videoRef.current) return;
+    if (gestureRef.current.pointerId !== e.pointerId) return;
+
+    const dy = e.clientY - gestureRef.current.startY;
+
+    // بالا => زیاد، پایین => کم
+    const step = 0.0025; // حساسیت
+    let nextVol = gestureRef.current.startVolume - dy * step;
+
+    nextVol = Math.max(0, Math.min(1, nextVol));
+    videoRef.current.volume = nextVol;
+    setVolume(nextVol);
+  }
+
+  function endGesture(e) {
+    if (!videoRef.current) return;
+    if (gestureRef.current.pointerId !== e.pointerId) return;
+
+    // برگشت سرعت به مقدار تنظیم‌شده
+    videoRef.current.playbackRate = playbackRate;
+
+    gestureRef.current.pointerId = null;
+    gestureRef.current.doubled = false;
+
+    setControlsVisible(true);
+    showControlsTemporarily();
+  }
 }
