@@ -686,21 +686,22 @@ export default function MoviePluss() {
   };
 
   const renderEnglish = (text, prefix) => {
-    // همین قبلی: کلیک روی کلمه برای ترجمه تک‌کلمه (اگر خواستی نگه می‌داریم)
-    // اینجا چون فعلاً از translateWord استفاده نکردیم، همان را حذف نمی‌کنم،
-    // اما برای اینکه ارور ندهد، فقط متن را برمی‌گردانم.
-    // اگر خواستی ترجمه تک‌کلمه هم فعال شود، بگو.
     return text.split(/(\s+)/).map((token, index) => {
       if (/^\s+$/.test(token)) return token;
       return (
-        <span key={`${prefix}-${index}`} style={{ borderBottom: `1px dotted ${COLORS.yellow}`, cursor: "default" }}>
+        <span
+          key={`${prefix}-${index}`}
+          style={{
+            borderBottom: `1px dotted ${COLORS.yellow}`,
+            cursor: "default",
+          }}
+        >
           {token}
         </span>
       );
     });
   };
 
-  // کیبورد
   useEffect(() => {
     const handleKeyboard = (event) => {
       const tag = document.activeElement?.tagName;
@@ -851,12 +852,9 @@ export default function MoviePluss() {
 
         .subtitle-card:hover { border-color: ${COLORS.yellow} !important; }
 
-        /* ✅ تغییر اصلی درخواست شما: نوار پایین بزرگ‌تر و کلیک‌پذیرتر */
         .bottom-quickbar {
           flex: 0 0 auto;
           z-index: 60;
-
-          /* کمی بیشتر */
           padding: 14px 14px 18px;
 
           background: linear-gradient(
@@ -867,8 +865,6 @@ export default function MoviePluss() {
           border-top: 1px solid rgba(255,255,255,0.06);
         }
 
-        /* جهت RTL کلیدها: برای اینکه چینش راست/وسط/چپ مثل خواسته شما دربیاید،
-           container را LTR می‌کنیم */
         .bottom-quickbar-inner {
           direction: ltr;
 
@@ -886,7 +882,6 @@ export default function MoviePluss() {
           backdrop-filter: blur(8px);
         }
 
-        /* دکمه‌ها بزرگ‌تر: افزایش ارتفاع و پهنا */
         .quick-btn {
           direction: rtl;
 
@@ -911,7 +906,6 @@ export default function MoviePluss() {
         .quick-btn:active { transform: scale(0.98); }
 
         .quick-btn.play {
-          /* وسط کمی پهن‌تر/قوی‌تر مثل تصویر */
           width: 140px;
           height: 64px;
 
@@ -928,7 +922,6 @@ export default function MoviePluss() {
           .quick-btn.play { width: 120px; height: 60px; }
         }
 
-        /* پاپ‌آپ و سایر UI */
         .translation-popup {
           position: absolute;
           z-index: 100;
@@ -951,7 +944,7 @@ export default function MoviePluss() {
         .settings-header {
           display: flex;
           align-items: center;
-          justifyContent: space-between;
+          justify-content: space-between;
           gap: 10px;
           margin-bottom: 10px;
           padding-bottom: 10px;
@@ -1095,7 +1088,6 @@ export default function MoviePluss() {
             </label>
           ) : (
             <>
-              {/* فیلم */}
               <div className="video-stage">
                 <video
                   ref={videoRef}
@@ -1118,7 +1110,6 @@ export default function MoviePluss() {
                   }}
                 />
 
-                {/* تنظیمات overlay فقط برای رنج/زمان/تنظیمات/تمام صفحه حفظ شده */}
                 <div
                   className={`player-controls ${controlsVisible ? "" : "hidden"}`}
                   style={{
@@ -1306,7 +1297,6 @@ export default function MoviePluss() {
                   )}
                 </div>
 
-                {/* زیرنویس overlay */}
                 {activeCue && (
                   <div
                     style={{
@@ -1362,7 +1352,6 @@ export default function MoviePluss() {
                 )}
               </div>
 
-              {/* کارت‌ها */}
               {cues.length > 0 ? (
                 <section
                   ref={cardsRef}
@@ -1497,16 +1486,16 @@ export default function MoviePluss() {
                 </section>
               )}
 
-              {/* ✅ نوار پایین بزرگ‌تر با کلیک بیشتر */}
               <div className="bottom-quickbar">
                 <div className="bottom-quickbar-inner">
-                  {/* سمت راست = کارت بعدی */}
+                  {/* جابجایی دکمه‌ها: کارت قبلی/بعدی فقط جای‌شان عوض شد */}
+                  {/* سمت راست = کارت قبلی */}
                   <button
                     className="quick-btn"
-                    onClick={goToNextCard}
-                    title="کارت بعدی"
+                    onClick={goToPreviousCard}
+                    title="کارت قبلی"
                     type="button"
-                    aria-label="کارت بعدی"
+                    aria-label="کارت قبلی"
                   >
                     <ChevronRight size={26} />
                   </button>
@@ -1522,13 +1511,13 @@ export default function MoviePluss() {
                     {isPlaying ? <Pause size={26} /> : <Play size={26} />}
                   </button>
 
-                  {/* سمت چپ = کارت قبلی */}
+                  {/* سمت چپ = کارت بعدی */}
                   <button
                     className="quick-btn"
-                    onClick={goToPreviousCard}
-                    title="کارت قبلی"
+                    onClick={goToNextCard}
+                    title="کارت بعدی"
                     type="button"
-                    aria-label="کارت قبلی"
+                    aria-label="کارت بعدی"
                   >
                     <ChevronLeft size={26} />
                   </button>
