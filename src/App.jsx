@@ -273,7 +273,6 @@ export default function App() {
 
   const suppressOutsideClickRef = useRef(false);
 
-  // Split default: cards 40%, video 60%
   const [cardsRatio, setCardsRatio] = useState(0.4);
   const minCardsRatio = 0.18;
   const maxCardsRatio = 0.82;
@@ -323,7 +322,9 @@ export default function App() {
 
   const activeCue = currentCue >= 0 ? cuesRef.current[currentCue] : null;
 
-  // Load last settings (NOT subtitles)
+  // NEW: holding finger status
+  const holdingRef = useRef(false);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_SETTINGS);
@@ -345,10 +346,8 @@ export default function App() {
 
       if (typeof s?.volume === "number") setVolume(Math.max(0, Math.min(1, s.volume)));
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // sync refs
   useEffect(() => {
     cuesRef.current = cues;
   }, [cues]);
@@ -361,14 +360,12 @@ export default function App() {
     repeatRef.current = repeatOn;
   }, [repeatOn]);
 
-  // apply video controls
   useEffect(() => {
     if (!videoRef.current) return;
     videoRef.current.volume = volume;
     videoRef.current.playbackRate = playbackRate;
   }, [volume, playbackRate]);
 
-  // fullscreen state
   useEffect(() => {
     const onFullscreenChange = () => {
       setIsFullscreen(document.fullscreenElement === playerRef.current);
@@ -377,7 +374,6 @@ export default function App() {
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
 
-  // save currentTime only per-video
   const saveCurrentTime = useCallback(() => {
     if (!videoName) return;
     const key = `${STORAGE_LAST_TIME_PREFIX}${videoName}`;
@@ -393,7 +389,6 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, [saveCurrentTime]);
 
-  // persist settings
   const persistSettings = useCallback(() => {
     try {
       localStorage.setItem(
@@ -431,7 +426,6 @@ export default function App() {
     persistSettings();
   }, [persistSettings]);
 
-  // controls auto hide
   const showControlsTemporarily = useCallback(() => {
     setControlsVisible(true);
     clearTimeout(hideControlsTimerRef.current);
@@ -518,13 +512,31 @@ export default function App() {
 
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
+
     const time = videoRef.current.currentTime;
     setCurrentTime(time);
 
     const list = cuesRef.current;
     const index = currentCueRef.current;
 
-    if (repeatRef.current && index >= 0 && list[index]) {
+    // NEW: if holding finger -> ignore repeat and go to next cue instead
+    if (holdingRef.current && index >= 0 && list[index]) {
+      const current = list[index];
+      const next = list[index + 1];
+      const boundary = next ? next.start : current.end;
+
+      // when we reach the start of next cue (or end), jump forward
+      if (next && time >= boundary - 0.04) {
+        // move to next card, do NOT repeat current
+        currentCueRef.current = index + 1;
+        setCurrentCue(index + 1);
+        videoRef.current.currentTime = next.start;
+        return;
+      }
+    }
+
+    // Normal repeat logic (only when not holding)
+    if (!holdingRef.current && repeatRef.current && index >= 0 && list[index]) {
       const current = list[index];
       const next = list[index + 1];
       const boundary = next ? next.start : current.end;
@@ -567,7 +579,6 @@ export default function App() {
     setVideoUrl(url);
     setVideoName(file.name);
 
-    // reset player state
     setCurrentTime(0);
     setDuration(0);
     setCurrentCue(-1);
@@ -576,7 +587,6 @@ export default function App() {
     setIsPlaying(false);
     setWordPopup(null);
 
-    // If any subtitles already selected, apply them
     if (englishText || persianText) {
       const merged = mergeSubtitles(englishText || "", persianText || "");
       setCues(merged);
@@ -584,7 +594,6 @@ export default function App() {
     }
   };
 
-  // Apply subtitles: NEW logic supports “either one”
   const applySubtitlesNow = useCallback(() => {
     const merged = mergeSubtitles(englishText || "", persianText || "");
     setCues(merged);
@@ -608,7 +617,6 @@ export default function App() {
     }
   };
 
-  // NEW: if either subtitle exists -> apply
   useEffect(() => {
     if (englishText || persianText) {
       applySubtitlesNow();
@@ -628,7 +636,6 @@ export default function App() {
       setPersianEncoding(encoding);
       if (persianFile) setPersianText(await decodeFile(persianFile, encoding));
     }
-    // apply is triggered by englishText/persianText changes
   };
 
   const toggleFullscreen = async () => {
@@ -640,21 +647,17 @@ export default function App() {
     }
   };
 
-  // ================== Gesture: remove volume vertical gesture
-  const gestureRef = useRef({
-    pointerId: null,
-    startY: 0,
-  });
+  // NEW/CONFIRMED: holding finger => 2x speed; also forces next cue via holdingRef in handleTimeUpdate
+  const gestureRef = useRef({ pointerId: null });
 
   const onVideoPointerDown = useCallback(
     (e) => {
       if (!videoRef.current) return;
+
       gestureRef.current.pointerId = e.pointerId;
-      gestureRef.current.startY = e.clientY;
+      holdingRef.current = true;
 
-      // hold finger => double speed
       videoRef.current.playbackRate = playbackRate * 2;
-
       setControlsVisible(false);
 
       try {
@@ -665,8 +668,7 @@ export default function App() {
   );
 
   const onVideoPointerMove = useCallback((e) => {
-    // no volume gesture anymore
-    void e;
+    void e; // no volume gesture
   }, []);
 
   const endGesture = useCallback(
@@ -674,16 +676,16 @@ export default function App() {
       if (!videoRef.current) return;
       if (gestureRef.current.pointerId !== e.pointerId) return;
 
-      videoRef.current.playbackRate = playbackRate;
+      holdingRef.current = false;
       gestureRef.current.pointerId = null;
 
+      videoRef.current.playbackRate = playbackRate;
       setControlsVisible(true);
       showControlsTemporarily();
     },
     [playbackRate, showControlsTemporarily]
   );
 
-  // Split drag
   const dragStateRef = useRef({
     dragging: false,
     startClientY: 0,
@@ -734,7 +736,6 @@ export default function App() {
     };
   }, []);
 
-  // word popup close
   useEffect(() => {
     const onDocClick = (e) => {
       if (suppressOutsideClickRef.current) return;
@@ -755,7 +756,6 @@ export default function App() {
     return () => document.removeEventListener("click", onDocClick, true);
   }, []);
 
-  // word translation
   const fetchWordTranslation = useCallback(async (word) => {
     const clean = (word || "").trim();
     if (!clean) return "";
@@ -821,9 +821,7 @@ export default function App() {
           next[cueIndex] = { ...next[cueIndex], fa: cachedFa };
           return next;
         });
-        cuesRef.current = cuesRef.current.map((c, i) =>
-          i === cueIndex ? { ...c, fa: cachedFa } : c
-        );
+        cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: cachedFa } : c));
         return;
       }
 
@@ -839,9 +837,7 @@ export default function App() {
         next[cueIndex] = { ...next[cueIndex], fa: faText };
         return next;
       });
-      cuesRef.current = cuesRef.current.map((c, i) =>
-        i === cueIndex ? { ...c, fa: faText } : c
-      );
+      cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: faText } : c));
     } catch {
       const faText = "خطا در دریافت ترجمه";
       setCues((prev) => {
@@ -849,9 +845,7 @@ export default function App() {
         next[cueIndex] = { ...next[cueIndex], fa: faText };
         return next;
       });
-      cuesRef.current = cuesRef.current.map((c, i) =>
-        i === cueIndex ? { ...c, fa: faText } : c
-      );
+      cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: faText } : c));
     } finally {
       setCardTranslateLoading((prev) => {
         const n = { ...prev };
@@ -908,7 +902,6 @@ export default function App() {
     });
   };
 
-  // keyboard shortcuts
   useEffect(() => {
     const handleKeyboard = (event) => {
       const tag = document.activeElement?.tagName;
@@ -937,7 +930,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
 
-  // auto scroll card to active
   useEffect(() => {
     if (dragStateRef.current.dragging) return;
     if (currentCue < 0 || !cardsRef.current) return;
