@@ -280,38 +280,41 @@ export default function MoviePluss() {
     };
   }, []);
 
-  // ✅ تغییر اصلی: اسکرول خودکار کارت فعال به مرکز کادر کارت‌ها
+  // ✅ تغییر اصلی: اسکرول کارت فعال دقیقاً وسط cards-container
   useEffect(() => {
     if (currentCue < 0 || !cardsRef.current) return;
 
-    const container = cardsRef.current;
-    const cardElement = container.querySelector(
+    // div واقعی اسکرول همان cards-container است
+    const scrollContainer =
+      cardsRef.current.querySelector(".cards-container");
+
+    if (!scrollContainer) return;
+
+    const cardElement = scrollContainer.querySelector(
       `[data-card="${currentCue}"]`
     );
 
     if (!cardElement) return;
 
-    // در layout افقی: اسکرول روی محور X
-    // در layout عمودی: اسکرول روی محور Y
     const isVertical = cardsLayout === "vertical";
 
     if (isVertical) {
       const targetTop =
         cardElement.offsetTop -
-        container.clientHeight / 2 +
+        scrollContainer.clientHeight / 2 +
         cardElement.offsetHeight / 2;
 
-      container.scrollTo({
+      scrollContainer.scrollTo({
         top: Math.max(0, targetTop),
         behavior: "smooth",
       });
     } else {
       const targetLeft =
         cardElement.offsetLeft -
-        container.clientWidth / 2 +
+        scrollContainer.clientWidth / 2 +
         cardElement.offsetWidth / 2;
 
-      container.scrollTo({
+      scrollContainer.scrollTo({
         left: Math.max(0, targetLeft),
         behavior: "smooth",
       });
@@ -761,7 +764,6 @@ export default function MoviePluss() {
       "pointermove",
       handleTranslationPointerMove
     );
-
     window.addEventListener(
       "pointerup",
       handleTranslationPointerUp
@@ -772,7 +774,6 @@ export default function MoviePluss() {
         "pointermove",
         handleTranslationPointerMove
       );
-
       window.removeEventListener(
         "pointerup",
         handleTranslationPointerUp
@@ -921,13 +922,17 @@ export default function MoviePluss() {
     <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
       <style>{`
         * { box-sizing: border-box; }
+
         body {
           margin: 0;
           background: ${COLORS.bg};
           overflow-x: hidden;
           font-family: 'Vazirmatn', sans-serif;
         }
-        button, input, textarea, select { font-family: 'Vazirmatn', sans-serif; }
+
+        button, input, textarea, select {
+          font-family: 'Vazirmatn', sans-serif;
+        }
 
         input[type="range"] {
           appearance: none;
@@ -936,11 +941,13 @@ export default function MoviePluss() {
           background: transparent;
           cursor: pointer;
         }
+
         input[type="range"]::-webkit-slider-runnable-track {
           height: 4px;
           border-radius: 8px;
           background: ${COLORS.border};
         }
+
         input[type="range"]::-webkit-slider-thumb {
           appearance: none;
           width: 14px;
@@ -958,13 +965,32 @@ export default function MoviePluss() {
           background: #000;
           width: 100%;
         }
-        .movie-player.layout-vertical { display: flex; align-items: stretch; }
 
-        .video-stage { position: relative; min-width: 0; background: #000; }
-        .movie-player.layout-horizontal .video-stage { width: 100%; }
-        .movie-player.layout-vertical .video-stage { flex: 1 1 0%; min-width: 0; }
+        .movie-player.layout-vertical {
+          display: flex;
+          align-items: stretch;
+        }
 
-        .cards-section { background: ${COLORS.panel}; font-family: 'Vazirmatn', sans-serif; }
+        .video-stage {
+          position: relative;
+          min-width: 0;
+          background: #000;
+        }
+
+        .movie-player.layout-horizontal .video-stage {
+          width: 100%;
+        }
+
+        .movie-player.layout-vertical .video-stage {
+          flex: 1 1 0%;
+          min-width: 0;
+        }
+
+        .cards-section {
+          background: ${COLORS.panel};
+          font-family: 'Vazirmatn', sans-serif;
+        }
+
         .cards-header {
           display: flex;
           align-items: center;
@@ -973,7 +999,12 @@ export default function MoviePluss() {
           color: ${COLORS.muted};
           font-size: 12px;
         }
-        .cards-layout-toggle { display: flex; gap: 4px; }
+
+        .cards-layout-toggle {
+          display: flex;
+          gap: 4px;
+        }
+
         .cards-layout-toggle button {
           display: flex;
           align-items: center;
@@ -986,6 +1017,7 @@ export default function MoviePluss() {
           color: ${COLORS.muted};
           cursor: pointer;
         }
+
         .cards-layout-toggle button.active {
           border-color: ${COLORS.yellow};
           color: ${COLORS.yellow};
@@ -996,12 +1028,17 @@ export default function MoviePluss() {
           padding: 12px 14px 14px;
           border-top: 1px solid ${COLORS.border};
         }
-        .cards-section-horizontal .cards-header { margin-bottom: 9px; }
+
+        .cards-section-horizontal .cards-header {
+          margin-bottom: 9px;
+        }
+
         .cards-section-horizontal .cards-container {
           flex-direction: row;
           overflow-x: auto;
           overflow-y: hidden;
         }
+
         .cards-section-horizontal .subtitle-card {
           min-width: 230px;
           max-width: 230px;
@@ -1018,7 +1055,11 @@ export default function MoviePluss() {
           padding: 12px;
           min-height: 0;
         }
-        .cards-section-vertical .cards-header { margin-bottom: 9px; }
+
+        .cards-section-vertical .cards-header {
+          margin-bottom: 9px;
+        }
+
         .cards-section-vertical .cards-container {
           flex-direction: column;
           overflow-y: auto;
@@ -1027,7 +1068,11 @@ export default function MoviePluss() {
           flex: 1;
           min-height: 0;
         }
-        .cards-section-vertical .subtitle-card { width: 100%; padding: 11px; }
+
+        .cards-section-vertical .subtitle-card {
+          width: 100%;
+          padding: 11px;
+        }
 
         .movie-player:fullscreen {
           width: 100vw;
@@ -1037,8 +1082,14 @@ export default function MoviePluss() {
           background: #000;
           display: flex;
         }
-        .movie-player:fullscreen.layout-horizontal { flex-direction: column; }
-        .movie-player:fullscreen.layout-vertical { flex-direction: row; }
+
+        .movie-player:fullscreen.layout-horizontal {
+          flex-direction: column;
+        }
+
+        .movie-player:fullscreen.layout-vertical {
+          flex-direction: row;
+        }
 
         .movie-player:fullscreen .video-stage {
           flex: 1 1 auto;
@@ -1047,6 +1098,7 @@ export default function MoviePluss() {
           align-items: center;
           justify-content: center;
         }
+
         .movie-player:fullscreen video {
           width: auto;
           height: auto;
@@ -1060,6 +1112,7 @@ export default function MoviePluss() {
           max-height: 24vh;
           flex-shrink: 0;
         }
+
         .movie-player:fullscreen.layout-vertical .cards-section-vertical {
           height: 100%;
           width: 320px;
@@ -1072,60 +1125,127 @@ export default function MoviePluss() {
           left: 0;
           right: 0;
         }
-        .movie-player:fullscreen .player-controls input[type="range"] { height: 8px; }
-        .movie-player:fullscreen .player-controls button { width: 44px; height: 42px; }
+
+        .movie-player:fullscreen .player-controls input[type="range"] {
+          height: 8px;
+        }
+
+        .movie-player:fullscreen .player-controls button {
+          width: 44px;
+          height: 42px;
+        }
+
         .movie-player:fullscreen .player-controls .time-display {
           font-size: 14px;
           min-width: 140px;
         }
-        .movie-player:fullscreen .player-controls select { font-size: 13px; padding: 5px 10px; }
-        .movie-player:fullscreen .subtitle-overlay { bottom: 80px; }
+
+        .movie-player:fullscreen .player-controls select {
+          font-size: 13px;
+          padding: 5px 10px;
+        }
+
+        .movie-player:fullscreen .subtitle-overlay {
+          bottom: 80px;
+        }
+
         .movie-player:fullscreen .subtitle-overlay .subtitle-text {
           font-size: 24px !important;
           padding: 8px 16px !important;
         }
 
         @media (max-width: 767px) {
-          .upload-section { grid-template-columns: 1fr !important; }
-          .movie-player.layout-vertical { flex-direction: column; }
+          .upload-section {
+            grid-template-columns: 1fr !important;
+          }
+
+          .movie-player.layout-vertical {
+            flex-direction: column;
+          }
+
           .cards-section-vertical {
             width: 100%;
             max-height: 34vh;
             border-inline-start: none;
             border-top: 1px solid ${COLORS.border};
           }
-          .movie-player:fullscreen.layout-vertical { flex-direction: column; }
+
+          .movie-player:fullscreen.layout-vertical {
+            flex-direction: column;
+          }
+
           .movie-player:fullscreen.layout-vertical .cards-section-vertical {
             width: 100%;
             height: auto;
             max-height: 28vh;
           }
-          .player-controls { padding: 40px 8px 10px !important; }
-          .player-controls > div { gap: 5px !important; flex-wrap: wrap; }
-          .time-display { min-width: 84px !important; font-size: 10px !important; }
-          .subtitle-text { font-size: 14px !important; }
-          .cards-section-horizontal .subtitle-card { min-width: 190px; max-width: 190px; }
+
+          .player-controls {
+            padding: 40px 8px 10px !important;
+          }
+
+          .player-controls > div {
+            gap: 5px !important;
+            flex-wrap: wrap;
+          }
+
+          .time-display {
+            min-width: 84px !important;
+            font-size: 10px !important;
+          }
+
+          .subtitle-text {
+            font-size: 14px !important;
+          }
+
+          .cards-section-horizontal .subtitle-card {
+            min-width: 190px;
+            max-width: 190px;
+          }
         }
 
-        .player-controls { transition: opacity 0.15s ease; }
-        .player-controls.hidden { opacity: 0; pointer-events: none; }
+        .player-controls {
+          transition: opacity 0.15s ease;
+        }
 
-        .controls-row-1, .controls-row-2 {
+        .player-controls.hidden {
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        .controls-row-1,
+        .controls-row-2 {
           display: flex;
           align-items: center;
           gap: 8px;
           direction: ltr;
         }
-        .controls-row-1 { margin-top: 8px; flex-wrap: wrap; }
-        .controls-row-2 { margin-top: 6px; }
+
+        .controls-row-1 {
+          margin-top: 8px;
+          flex-wrap: wrap;
+        }
+
+        .controls-row-2 {
+          margin-top: 6px;
+        }
 
         @media (max-width: 767px) {
-          .controls-row-1, .controls-row-2 { gap: 5px; }
+          .controls-row-1,
+          .controls-row-2 {
+            gap: 5px;
+          }
         }
 
         @media (max-width: 900px) and (orientation: landscape) {
-          .movie-player { flex-direction: row !important; }
-          .video-stage { flex: 1 1 0% !important; }
+          .movie-player {
+            flex-direction: row !important;
+          }
+
+          .video-stage {
+            flex: 1 1 0% !important;
+          }
+
           .cards-section {
             width: 210px !important;
             flex-shrink: 0;
@@ -1134,12 +1254,14 @@ export default function MoviePluss() {
             max-height: none !important;
             height: 100%;
           }
+
           .cards-section .cards-container {
             flex-direction: column !important;
             overflow-y: auto !important;
             overflow-x: hidden !important;
             direction: rtl;
           }
+
           .cards-section .subtitle-card {
             width: 100% !important;
             min-width: unset !important;
@@ -1147,7 +1269,9 @@ export default function MoviePluss() {
           }
         }
 
-        .subtitle-card:hover { border-color: ${COLORS.yellow} !important; }
+        .subtitle-card:hover {
+          border-color: ${COLORS.yellow} !important;
+        }
 
         .translation-popup {
           position: absolute;
@@ -1156,8 +1280,15 @@ export default function MoviePluss() {
           user-select: none;
           touch-action: none;
         }
-        .translation-handle { cursor: grab; touch-action: none; }
-        .translation-handle:active { cursor: grabbing; }
+
+        .translation-handle {
+          cursor: grab;
+          touch-action: none;
+        }
+
+        .translation-handle:active {
+          cursor: grabbing;
+        }
 
         .cards-container {
           display: flex;
@@ -1169,17 +1300,25 @@ export default function MoviePluss() {
           scroll-behavior: smooth;
         }
 
-        .cards-container::-webkit-scrollbar { height: 6px; }
+        .cards-container::-webkit-scrollbar {
+          height: 6px;
+        }
+
         .cards-container::-webkit-scrollbar-track {
           background: ${COLORS.bg};
           border-radius: 3px;
         }
+
         .cards-container::-webkit-scrollbar-thumb {
           background: ${COLORS.border};
           border-radius: 3px;
         }
-        .cards-container::-webkit-scrollbar-thumb:hover { background: ${COLORS.muted}; }
 
+        .cards-container::-webkit-scrollbar-thumb:hover {
+          background: ${COLORS.muted};
+        }
+
+        /* استایل جدید برای بخش آپلود فایل‌ها */
         .upload-section {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr auto;
@@ -1189,7 +1328,11 @@ export default function MoviePluss() {
           border-bottom: 1px solid ${COLORS.border};
           align-items: stretch;
         }
-        .upload-section > * { min-height: 42px; }
+
+        .upload-section > * {
+          min-height: 42px;
+        }
+
         .upload-section .apply-btn {
           align-self: stretch;
           min-height: 100%;
@@ -1205,11 +1348,15 @@ export default function MoviePluss() {
           transition: all 0.2s ease;
           letter-spacing: 0.5px;
         }
+
         .upload-section .apply-btn:hover {
           transform: scale(1.02);
           box-shadow: 0 4px 15px rgba(242, 201, 76, 0.3);
         }
-        .upload-section .apply-btn:active { transform: scale(0.98); }
+
+        .upload-section .apply-btn:active {
+          transform: scale(0.98);
+        }
       `}</style>
 
       <header
@@ -1680,7 +1827,9 @@ export default function MoviePluss() {
 
                     <ControlButton
                       active={settingsOpen}
-                      onClick={() => setSettingsOpen((value) => !value)}
+                      onClick={() =>
+                        setSettingsOpen((value) => !value)
+                      }
                     >
                       <Settings size={18} />
                     </ControlButton>
@@ -1709,8 +1858,12 @@ export default function MoviePluss() {
                       background: "rgba(20,23,31,.97)",
                       fontFamily: "'Vazirmatn', sans-serif",
                     }}
-                    onClick={(event) => event.stopPropagation()}
-                    onContextMenu={(event) => event.stopPropagation()}
+                    onClick={(event) =>
+                      event.stopPropagation()
+                    }
+                    onContextMenu={(event) =>
+                      event.stopPropagation()
+                    }
                   >
                     <SettingRange
                       label="روشنایی"
@@ -1848,7 +2001,9 @@ export default function MoviePluss() {
                         onClick={() => jumpToCue(index, true)}
                         style={{
                           border: `1px solid ${
-                            currentCue === index ? COLORS.yellow : COLORS.border
+                            currentCue === index
+                              ? COLORS.yellow
+                              : COLORS.border
                           }`,
                           borderRadius: 10,
                           background:
@@ -1963,7 +2118,10 @@ function SubtitleInput({
           <option
             key={item.value}
             value={item.value}
-            style={{ background: COLORS.card, fontFamily: "'Vazirmatn', sans-serif" }}
+            style={{
+              background: COLORS.card,
+              fontFamily: "'Vazirmatn', sans-serif",
+            }}
           >
             {item.label}
           </option>
