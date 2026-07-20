@@ -56,10 +56,7 @@ function formatTime(value = 0) {
   const seconds = Math.floor(value % 60);
 
   if (hours > 0) {
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
-      2,
-      "0"
-    )}:${String(seconds).padStart(2, "0")}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
@@ -128,10 +125,7 @@ async function autoDecodeFile(file) {
   const invalidChars = utf8.match(/\uFFFD/g)?.length || 0;
 
   if (invalidChars > 3) {
-    return {
-      text: decodeBuffer(buffer, "windows-1256"),
-      encoding: "windows-1256",
-    };
+    return { text: decodeBuffer(buffer, "windows-1256"), encoding: "windows-1256" };
   }
   return { text: utf8, encoding: "utf-8" };
 }
@@ -369,6 +363,40 @@ export default function MoviePluss() {
   useEffect(() => {
     if (videoUrl) return () => URL.revokeObjectURL(videoUrl);
   }, [videoUrl]);
+
+  // ================== اسکرول خودکار کارت مثل قبل
+  useEffect(() => {
+    if (dragStateRef.current.dragging) return; // در حال drag مزاحم نشود
+    if (currentCue < 0 || !cardsRef.current) return;
+
+    const scrollContainer = cardsRef.current.querySelector?.(".cards-container") || cardsRef.current;
+    // در این نسخه cardsRef روی خود container است، پس اگر querySelector جواب نداد، همان را استفاده می‌کنیم
+    const containerEl = scrollContainer;
+    if (!containerEl) return;
+
+    const cardElement = containerEl.querySelector?.(`[data-card="${currentCue}"]`);
+    if (!cardElement) return;
+
+    const isVertical = cardsLayout === "vertical";
+
+    if (isVertical) {
+      const targetTop =
+        cardElement.offsetTop - containerEl.clientHeight / 2 + cardElement.offsetHeight / 2;
+
+      containerEl.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: "smooth",
+      });
+    } else {
+      const targetLeft =
+        cardElement.offsetLeft - containerEl.clientWidth / 2 + cardElement.offsetWidth / 2;
+
+      containerEl.scrollTo({
+        left: Math.max(0, targetLeft),
+        behavior: "smooth",
+      });
+    }
+  }, [currentCue, cardsLayout]);
 
   const showControlsTemporarily = useCallback(() => {
     setControlsVisible(true);
@@ -613,7 +641,6 @@ export default function MoviePluss() {
     try {
       if (translationCacheRef.current[key]) {
         const cachedFa = translationCacheRef.current[key];
-
         setCues((prev) => {
           const next = [...prev];
           next[cueIndex] = { ...next[cueIndex], fa: cachedFa };
@@ -771,8 +798,7 @@ export default function MoviePluss() {
       const dy = e.clientY - startClientY;
       const deltaRatio = dy / totalHeight;
 
-      // ✅ جهت درست:
-      // کشیدن دسته به پایین => کارت‌ها کمتر => cardsRatio کاهش
+      // کشیدن به پایین => کارت‌ها کمتر => cardsRatio کاهش
       let next = startCardsRatio - deltaRatio;
 
       next = Math.max(minCardsRatio, Math.min(maxCardsRatio, next));
@@ -959,6 +985,7 @@ export default function MoviePluss() {
           );
           border-top: 1px solid rgba(255,255,255,0.06);
         }
+
         .bottom-quickbar-inner {
           direction: ltr;
           display: flex;
@@ -1123,11 +1150,7 @@ export default function MoviePluss() {
               <div className="top-area" ref={splitContainerRef}>
                 <div
                   className="video-stage"
-                  style={{
-                    flex: `0 0 ${videoBasis}`,
-                    height: videoBasis,
-                    minHeight: 0,
-                  }}
+                  style={{ flex: `0 0 ${videoBasis}`, height: videoBasis, minHeight: 0 }}
                 >
                   <video
                     ref={videoRef}
@@ -1145,9 +1168,7 @@ export default function MoviePluss() {
                       e.preventDefault();
                       e.stopPropagation();
                     }}
-                    style={{
-                      filter: `brightness(${brightness}%)`,
-                    }}
+                    style={{ filter: `brightness(${brightness}%)` }}
                   />
 
                   <div
@@ -1268,7 +1289,9 @@ export default function MoviePluss() {
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <Settings size={16} color={COLORS.yellow} />
-                            <span style={{ color: COLORS.text, fontSize: 12, fontWeight: 800 }}>تنظیمات</span>
+                            <span style={{ color: COLORS.text, fontSize: 12, fontWeight: 800 }}>
+                              تنظیمات
+                            </span>
                           </div>
                           <button
                             onClick={() => setSettingsOpen(false)}
@@ -1415,6 +1438,7 @@ export default function MoviePluss() {
                     )}
                   </div>
 
+                  {/* overlay */}
                   {activeCue && (
                     <div
                       style={{
@@ -1428,7 +1452,7 @@ export default function MoviePluss() {
                         gap: 5,
                         padding: "0 18px",
                         pointerEvents: "none",
-                        zIndex: 1000, // overlay بالاتر از کارت‌ها
+                        zIndex: 1000,
                       }}
                     >
                       {showEnglish && activeCue.en && (
@@ -1472,19 +1496,13 @@ export default function MoviePluss() {
                   )}
                 </div>
 
-                {/* دسته */}
                 <div className="split-handle" onPointerDown={onStartDrag} title="تغییر ارتفاع" />
 
-                {/* کارت‌ها */}
                 <section
                   className={`cards-section ${
                     cardsLayout === "vertical" ? "cards-section-vertical" : "cards-section-horizontal"
                   }`}
-                  style={{
-                    flex: `0 0 ${cardsBasis}`,
-                    height: cardsBasis,
-                    minHeight: 0,
-                  }}
+                  style={{ flex: `0 0 ${cardsBasis}`, height: cardsBasis, minHeight: 0 }}
                 >
                   <div className="cards-header">
                     <span>کارت‌ها ({cues.length})</span>
@@ -1572,15 +1590,7 @@ export default function MoviePluss() {
                               </div>
                             )}
 
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                marginBottom: 8,
-                                color: COLORS.muted,
-                                fontSize: 10,
-                              }}
-                            >
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, color: COLORS.muted, fontSize: 10 }}>
                               <span>کارت {index + 1}</span>
                               <span>{formatTime(cue.start)}</span>
                             </div>
@@ -1618,16 +1628,7 @@ export default function MoviePluss() {
                             )}
 
                             {cue.fa && cue.fa.trim() && (
-                              <div
-                                style={{
-                                  marginTop: 10,
-                                  color: COLORS.teal,
-                                  fontSize: 12,
-                                  lineHeight: 1.7,
-                                  textAlign: "right",
-                                  whiteSpace: "pre-wrap",
-                                }}
-                              >
+                              <div style={{ marginTop: 10, color: COLORS.teal, fontSize: 12, lineHeight: 1.7, textAlign: "right", whiteSpace: "pre-wrap" }}>
                                 {cue.fa}
                               </div>
                             )}
