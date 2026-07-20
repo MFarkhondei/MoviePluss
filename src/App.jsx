@@ -275,6 +275,9 @@ export default function MoviePluss() {
 
   const suppressOutsideClickRef = useRef(false);
 
+  // ===== ذخیره آخرین زمان مشاهده
+  const savedTimeKeyRef = useRef(null);
+
   const dragStateRef = useRef({
     dragging: false,
     startClientY: 0,
@@ -364,16 +367,25 @@ export default function MoviePluss() {
     if (videoUrl) return () => URL.revokeObjectURL(videoUrl);
   }, [videoUrl]);
 
+  const saveCurrentTime = useCallback(() => {
+    if (!savedTimeKeyRef.current) return;
+    if (!videoRef.current) return;
+    localStorage.setItem(savedTimeKeyRef.current, String(videoRef.current.currentTime || 0));
+  }, []);
+
+  // ذخیره هنگام خروج/ریلود
+  useEffect(() => {
+    const beforeUnload = () => saveCurrentTime();
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [saveCurrentTime]);
+
   // ================== اسکرول خودکار کارت مثل قبل
   useEffect(() => {
-    if (dragStateRef.current.dragging) return; // در حال drag مزاحم نشود
+    if (dragStateRef.current.dragging) return;
     if (currentCue < 0 || !cardsRef.current) return;
 
-    const scrollContainer = cardsRef.current.querySelector?.(".cards-container") || cardsRef.current;
-    // در این نسخه cardsRef روی خود container است، پس اگر querySelector جواب نداد، همان را استفاده می‌کنیم
-    const containerEl = scrollContainer;
-    if (!containerEl) return;
-
+    const containerEl = cardsRef.current;
     const cardElement = containerEl.querySelector?.(`[data-card="${currentCue}"]`);
     if (!cardElement) return;
 
@@ -383,18 +395,12 @@ export default function MoviePluss() {
       const targetTop =
         cardElement.offsetTop - containerEl.clientHeight / 2 + cardElement.offsetHeight / 2;
 
-      containerEl.scrollTo({
-        top: Math.max(0, targetTop),
-        behavior: "smooth",
-      });
+      containerEl.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
     } else {
       const targetLeft =
         cardElement.offsetLeft - containerEl.clientWidth / 2 + cardElement.offsetWidth / 2;
 
-      containerEl.scrollTo({
-        left: Math.max(0, targetLeft),
-        behavior: "smooth",
-      });
+      containerEl.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
     }
   }, [currentCue, cardsLayout]);
 
@@ -434,7 +440,8 @@ export default function MoviePluss() {
     videoRef.current?.pause();
     setIsPlaying(false);
     setControlsVisible(true);
-  }, []);
+    saveCurrentTime();
+  }, [saveCurrentTime]);
 
   const togglePlay = useCallback(() => {
     if (!videoRef.current) return;
@@ -520,15 +527,30 @@ export default function MoviePluss() {
     setDuration(videoRef.current.duration || 0);
     videoRef.current.volume = volume;
     videoRef.current.playbackRate = playbackRate;
+
+    // ✅ بازیابی آخرین زمان
+    if (savedTimeKeyRef.current) {
+      const saved = localStorage.getItem(savedTimeKeyRef.current);
+      const t = saved ? Number(saved) : 0;
+      if (Number.isFinite(t) && t > 0) {
+        const safeT = Math.min(t, videoRef.current.duration || t);
+        videoRef.current.currentTime = safeT;
+        setCurrentTime(safeT);
+      }
+    }
   };
 
   const handleVideoFile = (file) => {
     if (!file) return;
+
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     const url = URL.createObjectURL(file);
 
     setVideoUrl(url);
     setVideoName(file.name);
+
+    // ✅ کلید با نام فایل
+    savedTimeKeyRef.current = `moviepluss:lastTime:${file.name}`;
 
     setCurrentTime(0);
     setDuration(0);
@@ -1161,7 +1183,11 @@ export default function MoviePluss() {
                       setIsPlaying(true);
                       setControlsVisible(true);
                     }}
-                    onPause={() => setIsPlaying(false)}
+                    onPause={() => {
+                      setIsPlaying(false);
+                      setControlsVisible(true);
+                      saveCurrentTime();
+                    }}
                     onDoubleClick={toggleFullscreen}
                     onClick={togglePlay}
                     onContextMenu={(e) => {
@@ -1498,11 +1524,16 @@ export default function MoviePluss() {
 
                 <div className="split-handle" onPointerDown={onStartDrag} title="تغییر ارتفاع" />
 
+                {/* Cards */}
                 <section
                   className={`cards-section ${
                     cardsLayout === "vertical" ? "cards-section-vertical" : "cards-section-horizontal"
                   }`}
-                  style={{ flex: `0 0 ${cardsBasis}`, height: cardsBasis, minHeight: 0 }}
+                  style={{
+                    flex: `0 0 ${cardsBasis}`,
+                    height: cardsBasis,
+                    minHeight: 0,
+                  }}
                 >
                   <div className="cards-header">
                     <span>کارت‌ها ({cues.length})</span>
