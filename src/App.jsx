@@ -56,7 +56,10 @@ function formatTime(value = 0) {
   const seconds = Math.floor(value % 60);
 
   if (hours > 0) {
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+      2,
+      "0"
+    )}:${String(seconds).padStart(2, "0")}`;
   }
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
@@ -125,7 +128,10 @@ async function autoDecodeFile(file) {
   const invalidChars = utf8.match(/\uFFFD/g)?.length || 0;
 
   if (invalidChars > 3) {
-    return { text: decodeBuffer(buffer, "windows-1256"), encoding: "windows-1256" };
+    return {
+      text: decodeBuffer(buffer, "windows-1256"),
+      encoding: "windows-1256",
+    };
   }
   return { text: utf8, encoding: "utf-8" };
 }
@@ -282,8 +288,8 @@ export default function MoviePluss() {
     totalHeight: 1,
   });
 
-  // ===================== Split default 30%/70%
-  const [cardsRatio, setCardsRatio] = useState(0.30);
+  // ===== پیش‌فرض: کارت‌ها 40% و فیلم 60%
+  const [cardsRatio, setCardsRatio] = useState(0.40);
   const minCardsRatio = 0.18;
   const maxCardsRatio = 0.82;
 
@@ -318,6 +324,7 @@ export default function MoviePluss() {
   const [filesOpen, setFilesOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
   const [controlsVisible, setControlsVisible] = useState(true);
   const [cardsLayout, setCardsLayout] = useState("horizontal");
 
@@ -366,9 +373,7 @@ export default function MoviePluss() {
   const showControlsTemporarily = useCallback(() => {
     setControlsVisible(true);
     clearTimeout(hideControlsTimerRef.current);
-    if (isPlaying) {
-      hideControlsTimerRef.current = setTimeout(() => setControlsVisible(false), 3500);
-    }
+    if (isPlaying) hideControlsTimerRef.current = setTimeout(() => setControlsVisible(false), 3500);
   }, [isPlaying]);
 
   const handleMouseEnterPlayer = useCallback(() => {
@@ -469,7 +474,6 @@ export default function MoviePluss() {
       const current = list[index];
       const next = list[index + 1];
       const boundary = next ? next.start : current.end;
-
       if (time >= boundary - 0.04) {
         videoRef.current.currentTime = current.start;
         return;
@@ -549,7 +553,6 @@ export default function MoviePluss() {
     }
   };
 
-  // ترجمه کلمه
   const fetchWordTranslation = useCallback(async (word) => {
     const clean = (word || "").trim();
     if (!clean) return "";
@@ -625,7 +628,6 @@ export default function MoviePluss() {
       );
       const data = await response.json();
       const faText = data?.responseData?.translatedText || "ترجمه پیدا نشد";
-
       translationCacheRef.current[key] = faText;
 
       setCues((prev) => {
@@ -698,7 +700,6 @@ export default function MoviePluss() {
     });
   };
 
-  // بستن popup با کلیک بیرون
   useEffect(() => {
     const onDocClick = (e) => {
       if (suppressOutsideClickRef.current) return;
@@ -718,7 +719,6 @@ export default function MoviePluss() {
     return () => document.removeEventListener("click", onDocClick, true);
   }, []);
 
-  // کیبورد
   useEffect(() => {
     const handleKeyboard = (event) => {
       const tag = document.activeElement?.tagName;
@@ -769,9 +769,12 @@ export default function MoviePluss() {
 
       const { totalHeight, startClientY, startCardsRatio } = dragStateRef.current;
       const dy = e.clientY - startClientY;
-      const deltaRatio = dy / totalHeight; // اگر پایین کشیدیم => کارت‌ها بیشتر
+      const deltaRatio = dy / totalHeight;
 
-      let next = startCardsRatio + deltaRatio;
+      // ✅ جهت درست:
+      // کشیدن دسته به پایین => کارت‌ها کمتر => cardsRatio کاهش
+      let next = startCardsRatio - deltaRatio;
+
       next = Math.max(minCardsRatio, Math.min(maxCardsRatio, next));
       setCardsRatio(next);
     };
@@ -844,7 +847,7 @@ export default function MoviePluss() {
           background: rgba(255,255,255,0.04);
           border-top: 1px solid rgba(255,255,255,0.06);
           border-bottom: 1px solid rgba(255,255,255,0.06);
-          touch-action: none; /* ✅ مهم برای موبایل */
+          touch-action: none;
           z-index: 10;
           flex: 0 0 auto;
         }
@@ -1065,9 +1068,7 @@ export default function MoviePluss() {
             encoding={englishEncoding}
             color={COLORS.yellow}
             onFile={handleSubtitleFile}
-            onEncoding={async (lang, enc) => {
-              await changeSubtitleEncoding(lang, enc);
-            }}
+            onEncoding={async (lang, enc) => changeSubtitleEncoding(lang, enc)}
           />
 
           <SubtitleInput
@@ -1076,9 +1077,7 @@ export default function MoviePluss() {
             encoding={persianEncoding}
             color={COLORS.teal}
             onFile={handleSubtitleFile}
-            onEncoding={async (lang, enc) => {
-              await changeSubtitleEncoding(lang, enc);
-            }}
+            onEncoding={async (lang, enc) => changeSubtitleEncoding(lang, enc)}
           />
 
           <button onClick={applySubtitles} className="apply-btn">
@@ -1121,7 +1120,6 @@ export default function MoviePluss() {
             </label>
           ) : (
             <>
-              {/* ✅ split container that has real height */}
               <div className="top-area" ref={splitContainerRef}>
                 <div
                   className="video-stage"
@@ -1417,7 +1415,6 @@ export default function MoviePluss() {
                     )}
                   </div>
 
-                  {/* ✅ overlay بالای همه */}
                   {activeCue && (
                     <div
                       style={{
@@ -1431,7 +1428,7 @@ export default function MoviePluss() {
                         gap: 5,
                         padding: "0 18px",
                         pointerEvents: "none",
-                        zIndex: 1000, // ✅ خیلی بالا
+                        zIndex: 1000, // overlay بالاتر از کارت‌ها
                       }}
                     >
                       {showEnglish && activeCue.en && (
@@ -1475,16 +1472,14 @@ export default function MoviePluss() {
                   )}
                 </div>
 
-                {/* ✅ handle */}
-                <div
-                  className="split-handle"
-                  onPointerDown={onStartDrag}
-                  title="تغییر ارتفاع"
-                />
+                {/* دسته */}
+                <div className="split-handle" onPointerDown={onStartDrag} title="تغییر ارتفاع" />
 
-                {/* Cards */}
+                {/* کارت‌ها */}
                 <section
-                  className={`cards-section ${cardsLayout === "vertical" ? "cards-section-vertical" : "cards-section-horizontal"}`}
+                  className={`cards-section ${
+                    cardsLayout === "vertical" ? "cards-section-vertical" : "cards-section-horizontal"
+                  }`}
                   style={{
                     flex: `0 0 ${cardsBasis}`,
                     height: cardsBasis,
@@ -1540,7 +1535,9 @@ export default function MoviePluss() {
                             className="subtitle-card"
                             onClick={() => jumpToCue(index, true)}
                             style={{
-                              border: `1px solid ${currentCue === index ? COLORS.yellow : COLORS.border}`,
+                              border: `1px solid ${
+                                currentCue === index ? COLORS.yellow : COLORS.border
+                              }`,
                               borderRadius: 10,
                               background: currentCue === index ? COLORS.active : COLORS.card,
                               cursor: "pointer",
@@ -1575,7 +1572,15 @@ export default function MoviePluss() {
                               </div>
                             )}
 
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, color: COLORS.muted, fontSize: 10 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                marginBottom: 8,
+                                color: COLORS.muted,
+                                fontSize: 10,
+                              }}
+                            >
                               <span>کارت {index + 1}</span>
                               <span>{formatTime(cue.start)}</span>
                             </div>
@@ -1613,7 +1618,16 @@ export default function MoviePluss() {
                             )}
 
                             {cue.fa && cue.fa.trim() && (
-                              <div style={{ marginTop: 10, color: COLORS.teal, fontSize: 12, lineHeight: 1.7, textAlign: "right", whiteSpace: "pre-wrap" }}>
+                              <div
+                                style={{
+                                  marginTop: 10,
+                                  color: COLORS.teal,
+                                  fontSize: 12,
+                                  lineHeight: 1.7,
+                                  textAlign: "right",
+                                  whiteSpace: "pre-wrap",
+                                }}
+                              >
                                 {cue.fa}
                               </div>
                             )}
@@ -1629,18 +1643,17 @@ export default function MoviePluss() {
                 </section>
               </div>
 
-              {/* Bottom quickbar */}
               <div className="bottom-quickbar">
                 <div className="bottom-quickbar-inner">
-                  <button className="quick-btn" onClick={goToPreviousCard} title="کارت قبلی" type="button" aria-label="کارت قبلی">
+                  <button className="quick-btn" onClick={goToPreviousCard} title="کارت قبلی" type="button">
                     <ChevronLeft size={26} />
                   </button>
 
-                  <button className="quick-btn play" onClick={togglePlay} title={isPlaying ? "توقف" : "شروع"} type="button" aria-label={isPlaying ? "توقف" : "شروع"}>
+                  <button className="quick-btn play" onClick={togglePlay} title={isPlaying ? "توقف" : "شروع"} type="button">
                     {isPlaying ? <Pause size={26} /> : <Play size={26} />}
                   </button>
 
-                  <button className="quick-btn" onClick={goToNextCard} title="کارت بعدی" type="button" aria-label="کارت بعدی">
+                  <button className="quick-btn" onClick={goToNextCard} title="کارت بعدی" type="button">
                     <ChevronRight size={26} />
                   </button>
                 </div>
