@@ -308,7 +308,6 @@ export default function MoviePluss() {
 
   const [repeatOn, setRepeatOn] = useState(false);
 
-  // پیش‌فرض خاموش
   const [showEnglish, setShowEnglish] = useState(false);
   const [showPersian, setShowPersian] = useState(false);
 
@@ -324,13 +323,11 @@ export default function MoviePluss() {
   const [subtitleBottom, setSubtitleBottom] = useState(70);
   const [subtitleBackground, setSubtitleBackground] = useState(true);
 
-  // پاپ‌آپ ترجمه کلمه (بالای کارت)
   const [wordPopup, setWordPopup] = useState(null);
   // wordPopup: { cardIndex, word, text, loading }
 
   const [cardTranslateLoading, setCardTranslateLoading] = useState({});
 
-  // ✅ FIX #1: activeCue از cuesRef می‌خواند تا overlay همیشه ترجمه‌های جدید را بگیرد
   const activeCue = currentCue >= 0 ? cuesRef.current[currentCue] : null;
 
   useEffect(() => {
@@ -358,7 +355,6 @@ export default function MoviePluss() {
       document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
 
-  // اسکرول کارت فعال وسط container
   useEffect(() => {
     if (currentCue < 0 || !cardsRef.current) return;
 
@@ -668,6 +664,7 @@ export default function MoviePluss() {
     [fetchWordTranslation]
   );
 
+  // تابع ترجمه کارت به فارسی
   const translateCardToPersian = async (cueIndex) => {
     const cue = cuesRef.current[cueIndex];
     if (!cue) return;
@@ -725,7 +722,7 @@ export default function MoviePluss() {
         i === cueIndex ? { ...c, fa: faText } : c
       );
 
-      setShowPersian(true);
+      // REMOVED: setShowPersian(true); // حذف شد تا نمایش overlay فارسی خودکار فعال نشود
     } catch {
       const faText = "خطا در دریافت ترجمه";
       setCues((prev) => {
@@ -736,7 +733,7 @@ export default function MoviePluss() {
       cuesRef.current = cuesRef.current.map((c, i) =>
         i === cueIndex ? { ...c, fa: faText } : c
       );
-      setShowPersian(true);
+      // REMOVED: setShowPersian(true); // حذف شد تا نمایش overlay فارسی خودکار فعال نشود
     } finally {
       setCardTranslateLoading((prev) => {
         const n = { ...prev };
@@ -765,7 +762,6 @@ export default function MoviePluss() {
               fontWeight: 700,
             }}
             onClick={(e) => {
-              // ✅ FIX #3: preventDefault هم اضافه شد
               e.preventDefault();
               e.stopPropagation();
               translateWordPopup(token, cardIndex);
@@ -790,7 +786,6 @@ export default function MoviePluss() {
     });
   };
 
-  // کیبورد
   useEffect(() => {
     const handleKeyboard = (event) => {
       const tag = document.activeElement?.tagName;
@@ -819,7 +814,6 @@ export default function MoviePluss() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
 
-  // ✅ FIX #3: بستن popup با چک کردن .word-popup انجام می‌شود (به جای id)
   useEffect(() => {
     const onDocClick = (e) => {
       const target = e.target;
@@ -1265,7 +1259,6 @@ export default function MoviePluss() {
                   onClick={(e) => e.stopPropagation()}
                   onContextMenu={(e) => e.stopPropagation()}
                 >
-                  {/* ✅ FIX #2: چیدمان یک‌خطی با nowrap */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <input
                       type="range"
