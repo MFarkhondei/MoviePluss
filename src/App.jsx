@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -8,322 +9,272 @@ import React, {
 import {
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  CirclePlay,
-  Film,
-  Maximize,
-  Minimize,
   Pause,
   Play,
+  Repeat2,
   RotateCcw,
-  RotateCw,
   Settings,
-  Subtitles,
+  Volume2,
+  VolumeX,
+  Maximize,
+  Minimize,
+  Upload,
   X,
 } from "lucide-react";
 
-import "vazirmatn/Vazirmatn-font-face.css";
-
 const COLORS = {
-  bg: "#0D0F15",
-  panel: "#171A23",
-  card: "#202532",
-  active: "#2C3447",
-  border: "#343B4D",
-  text: "#F2F0EA",
-  muted: "#9299AA",
-  yellow: "#F2C94C",
-  teal: "#4FD9C0",
+  background: "#0d1017",
+  panel: "#161b26",
+  panelLight: "#202838",
+  border: "#313b4d",
+  text: "#f4f6fa",
+  muted: "#9ca7b8",
+  yellow: "#f7c948",
+  teal: "#51d8c2",
+  active: "#2b3850",
 };
 
-const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+function timeToSeconds(time = "00:00:00") {
+  const values = time
+    .replace(",", ".")
+    .trim()
+    .split(":")
+    .map(Number);
 
-const ENCODINGS = [
-  { value: "utf-8", label: "UTF-8" },
-  { value: "windows-1256", label: "Windows-1256" },
-  { value: "iso-8859-6", label: "ISO-8859-6" },
-  { value: "windows-1252", label: "Windows-1252" },
-];
-
-function timeToSeconds(value = "") {
-  const parts = value.trim().replace(",", ".").split(":").map(Number);
-
-  if (parts.length === 3) {
-    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (values.length === 3) {
+    return values[0] * 3600 + values[1] * 60 + values[2];
   }
 
-  if (parts.length === 2) {
-    return parts[0] * 60 + parts[1];
+  if (values.length === 2) {
+    return values[0] * 60 + values[1];
   }
 
-  return Number(parts[0]) || 0;
+  return Number(values[0]) || 0;
 }
 
-function formatTime(value = 0) {
-  if (!Number.isFinite(value)) return "00:00";
+function formatTime(seconds = 0) {
+  if (!Number.isFinite(seconds)) return "00:00";
 
-  const hours = Math.floor(value / 3600);
-  const minutes = Math.floor((value % 3600) / 60);
-  const seconds = Math.floor(value % 60);
+  const totalSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
 
   if (hours > 0) {
     return `${String(hours).padStart(2, "0")}:${String(
       minutes
-    ).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    ).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   }
 
   return `${String(minutes).padStart(2, "0")}:${String(
-    seconds
+    secs
   ).padStart(2, "0")}`;
 }
 
-function parseSubtitleText(raw = "") {
-  if (!raw.trim()) return [];
+function parseSubtitle(text = "") {
+  if (!text.trim()) return [];
 
-  return raw
+  return text
     .replace(/\r/g, "")
-    .replace(/^WEBVTT.*\n+/i, "")
+    .replace(/^WEBVTT.*?\n+/i, "")
     .split(/\n\s*\n/)
-    .map((block) => block.trim())
-    .filter(Boolean)
     .map((block) => {
-      const lines = block.split("\n");
-      const timeIndex = lines.findIndex((line) =>
+      const lines = block.trim().split("\n");
+      const timeLineIndex = lines.findIndex((line) =>
         line.includes("-->")
       );
 
-      if (timeIndex === -1) return null;
+      if (timeLineIndex === -1) return null;
 
-      const times = lines[timeIndex].split("-->");
-      const start = timeToSeconds(times[0]);
-      const end = timeToSeconds(
-        times[1]?.trim().split(/\s+/)[0]
-      );
+      const [startText, endText] = lines[timeLineIndex].split("-->");
 
-      const text = lines
-        .slice(timeIndex + 1)
+      const subtitleText = lines
+        .slice(timeLineIndex + 1)
         .join(" ")
-        .replace(/<[^>]+>/g, "")
+        .replace(/<[^>]*>/g, "")
         .trim();
 
-      if (!text) return null;
+      if (!subtitleText) return null;
 
       return {
-        start,
-        end,
-        text,
+        start: timeToSeconds(startText),
+        end: timeToSeconds(endText.trim().split(/\s+/)[0]),
+        text: subtitleText,
       };
     })
-    .filter(Boolean)
-    .sort((a, b) => a.start - b.start);
+    .filter(Boolean);
 }
 
 function mergeSubtitles(englishText, persianText) {
-  const english = parseSubtitleText(englishText);
-  const persian = parseSubtitleText(persianText);
+  const englishList = parseSubtitle(englishText);
+  const persianList = parseSubtitle(persianText);
+  const length = Math.max(
+    englishList.length,
+    persianList.length
+  );
 
-  const total = Math.max(english.length, persian.length);
-
-  return Array.from({ length: total }, (_, index) => {
-    const en = english[index];
-    const fa = persian[index];
-    const base = en || fa;
+  return Array.from({ length }, (_, index) => {
+    const english = englishList[index];
+    const persian = persianList[index];
+    const base = english || persian;
 
     return {
-      index: index + 1,
+      id: index,
       start: base?.start || 0,
       end: base?.end || 0,
-      en: en?.text || "",
-      fa: fa?.text || "",
+      english: english?.text || "",
+      persian: persian?.text || "",
     };
   });
 }
 
-function decodeBuffer(buffer, encoding) {
-  try {
-    return new TextDecoder(encoding).decode(buffer);
-  } catch {
-    return new TextDecoder("utf-8").decode(buffer);
-  }
-}
+function readSubtitleFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve("");
+      return;
+    }
 
-async function autoDecodeFile(file) {
-  const buffer = await file.arrayBuffer();
-  const utf8 = new TextDecoder("utf-8").decode(buffer);
-  const invalidChars = utf8.match(/\uFFFD/g)?.length || 0;
+    const reader = new FileReader();
 
-  if (invalidChars > 3) {
-    return {
-      text: decodeBuffer(buffer, "windows-1256"),
-      encoding: "windows-1256",
+    reader.onload = (event) => {
+      resolve(event.target?.result || "");
     };
-  }
 
-  return {
-    text: utf8,
-    encoding: "utf-8",
-  };
+    reader.onerror = reject;
+    reader.readAsText(file, "UTF-8");
+  });
 }
 
-async function decodeFile(file, encoding) {
-  const buffer = await file.arrayBuffer();
-  return decodeBuffer(buffer, encoding);
-}
-
-export default function MoviePluss() {
+export default function App() {
   const videoRef = useRef(null);
+
+  /*
+    نکته مهم:
+    cardsViewportRef روی کادر اسکرول‌دار قرار دارد.
+    هر کارت با cardRefs ذخیره می‌شود.
+  */
+  const cardsViewportRef = useRef(null);
+  const cardRefs = useRef([]);
+
   const playerRef = useRef(null);
-  const cardsRef = useRef(null);
-  const translationRef = useRef(null);
-
-  const cuesRef = useRef([]);
   const currentCueRef = useRef(-1);
-  const repeatRef = useRef(false);
-
-  const translationDragRef = useRef(null);
-  const translationCacheRef = useRef({});
-  const hideOverlayTimerRef = useRef(null);
 
   const [videoUrl, setVideoUrl] = useState("");
   const [videoName, setVideoName] = useState("");
 
-  const [englishFile, setEnglishFile] = useState(null);
-  const [persianFile, setPersianFile] = useState(null);
+  const [englishSubtitleText, setEnglishSubtitleText] =
+    useState("");
+  const [persianSubtitleText, setPersianSubtitleText] =
+    useState("");
 
-  const [englishText, setEnglishText] = useState("");
-  const [persianText, setPersianText] = useState("");
-
-  const [englishEncoding, setEnglishEncoding] =
-    useState("utf-8");
-  const [persianEncoding, setPersianEncoding] =
-    useState("utf-8");
+  const [englishFileName, setEnglishFileName] = useState("");
+  const [persianFileName, setPersianFileName] = useState("");
 
   const [cues, setCues] = useState([]);
-  const [currentCue, setCurrentCue] = useState(-1);
-
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [currentCueIndex, setCurrentCueIndex] = useState(-1);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [volume, setVolume] = useState(1);
-  const [playbackRate, setPlaybackRate] = useState(1);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
 
-  const [repeatOn, setRepeatOn] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [repeatCurrentCard, setRepeatCurrentCard] =
+    useState(false);
+
   const [showEnglish, setShowEnglish] = useState(true);
   const [showPersian, setShowPersian] = useState(true);
 
-  const [filesOpen, setFilesOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [overlayVisible, setOverlayVisible] = useState(true);
 
-  const [brightness, setBrightness] = useState(100);
-  const [contrast, setContrast] = useState(100);
   const [subtitleSize, setSubtitleSize] = useState(100);
-  const [subtitleBottom, setSubtitleBottom] = useState(70);
-  const [subtitleBackground, setSubtitleBackground] =
-    useState(true);
+  const [subtitleBottom, setSubtitleBottom] = useState(50);
 
-  const [wordPopup, setWordPopup] = useState(null);
-
-  const [translationPosition, setTranslationPosition] =
-    useState({
-      top: 18,
-      right: 18,
-      left: null,
-    });
-
-  const activeCue =
-    currentCue >= 0 ? cues[currentCue] : null;
+  const activeCue = useMemo(() => {
+    if (currentCueIndex < 0) return null;
+    return cues[currentCueIndex] || null;
+  }, [cues, currentCueIndex]);
 
   useEffect(() => {
-    cuesRef.current = cues;
-  }, [cues]);
+    currentCueRef.current = currentCueIndex;
+  }, [currentCueIndex]);
 
-  useEffect(() => {
-    currentCueRef.current = currentCue;
-  }, [currentCue]);
+  /*
+    ----------------------------------------------------------------
+    تابع اصلی وسط‌چین کردن کارت فعال
+    ----------------------------------------------------------------
+    کارت فعال را پیدا می‌کند و scrollLeft را به اندازه‌ای تنظیم می‌کند
+    که مرکز کارت با مرکز کادر کارت‌ها یکی شود.
 
-  useEffect(() => {
-    repeatRef.current = repeatOn;
-  }, [repeatOn]);
-
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.playbackRate = playbackRate;
-    }
-  }, [playbackRate]);
-
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsFullscreen(
-        document.fullscreenElement === playerRef.current
-      );
-    };
-
-    document.addEventListener(
-      "fullscreenchange",
-      onFullscreenChange
-    );
-
-    return () => {
-      document.removeEventListener(
-        "fullscreenchange",
-        onFullscreenChange
-      );
-    };
-  }, []);
-
-  /* ---------- تابع اختصاصی: همیشه کارت فعال را وسط کادر قرار بده ---------- */
+    نکته:
+    در ابتدا و انتهای لیست، کارت به اندازه امکان در مرکز می‌ماند.
+    چون دیگر فضای اضافی برای اسکرول وجود ندارد، مقدار اسکرول محدود می‌شود.
+  */
   const centerActiveCard = useCallback((smooth = true) => {
-    const container = cardsRef.current;
-    const index = currentCueRef.current;
+    const viewport = cardsViewportRef.current;
+    const activeIndex = currentCueRef.current;
+    const activeCard = cardRefs.current[activeIndex];
 
-    if (!container || index < 0) return;
+    if (!viewport || !activeCard || activeIndex < 0) return;
 
-    const cardElement = container.querySelector(
-      `[data-card="${index}"]`
-    );
+    const viewportWidth = viewport.clientWidth;
+    const cardWidth = activeCard.offsetWidth;
 
-    if (!cardElement) return;
-
-    const targetLeft =
-      cardElement.offsetLeft -
-      container.clientWidth / 2 +
-      cardElement.offsetWidth / 2;
+    const targetScrollLeft =
+      activeCard.offsetLeft -
+      viewportWidth / 2 +
+      cardWidth / 2;
 
     const maxScrollLeft =
-      container.scrollWidth - container.clientWidth;
+      viewport.scrollWidth - viewport.clientWidth;
 
-    const clampedLeft = Math.max(
+    const safeScrollLeft = Math.max(
       0,
-      Math.min(targetLeft, Math.max(0, maxScrollLeft))
+      Math.min(targetScrollLeft, maxScrollLeft)
     );
 
-    container.scrollTo({
-      left: clampedLeft,
+    viewport.scrollTo({
+      left: safeScrollLeft,
       behavior: smooth ? "smooth" : "auto",
     });
   }, []);
 
+  /*
+    هر زمان کارت فعال تغییر کند:
+    - با پخش فیلم
+    - دکمه کارت بعدی
+    - دکمه کارت قبلی
+    - کلیک روی یک کارت
+    کارت جدید به وسط اسکرول می‌شود.
+  */
   useEffect(() => {
-    centerActiveCard(true);
-  }, [currentCue, centerActiveCard]);
+    const animationFrame = requestAnimationFrame(() => {
+      centerActiveCard(true);
+    });
 
+    return () => cancelAnimationFrame(animationFrame);
+  }, [currentCueIndex, centerActiveCard]);
+
+  /*
+    هنگام تغییر اندازه پنجره یا ورود/خروج از fullscreen،
+    کارت فعال دوباره بدون انیمیشن در مرکز محاسبه می‌شود.
+  */
   useEffect(() => {
-    if (!cardsRef.current) return;
-
-    const handleResize = () => centerActiveCard(false);
+    const handleResize = () => {
+      centerActiveCard(false);
+    };
 
     window.addEventListener("resize", handleResize);
 
-    const resizeObserver = new ResizeObserver(() =>
-      centerActiveCard(false)
-    );
+    const resizeObserver = new ResizeObserver(() => {
+      centerActiveCard(false);
+    });
 
-    resizeObserver.observe(cardsRef.current);
+    if (cardsViewportRef.current) {
+      resizeObserver.observe(cardsViewportRef.current);
+    }
 
     return () => {
       window.removeEventListener("resize", handleResize);
@@ -331,12 +282,41 @@ export default function MoviePluss() {
     };
   }, [centerActiveCard]);
 
+  /*
+    پس از ساخته شدن کارت‌ها در DOM،
+    محل اسکرول را دوباره محاسبه می‌کنیم.
+  */
   useEffect(() => {
-    if (cues.length > 0) {
-      const timer = setTimeout(() => centerActiveCard(false), 60);
-      return () => clearTimeout(timer);
-    }
+    const timer = setTimeout(() => {
+      centerActiveCard(false);
+    }, 80);
+
+    return () => clearTimeout(timer);
   }, [cues, centerActiveCard]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(
+        document.fullscreenElement === playerRef.current
+      );
+
+      setTimeout(() => {
+        centerActiveCard(false);
+      }, 150);
+    };
+
+    document.addEventListener(
+      "fullscreenchange",
+      handleFullscreenChange
+    );
+
+    return () => {
+      document.removeEventListener(
+        "fullscreenchange",
+        handleFullscreenChange
+      );
+    };
+  }, [centerActiveCard]);
 
   useEffect(() => {
     return () => {
@@ -345,177 +325,6 @@ export default function MoviePluss() {
       }
     };
   }, [videoUrl]);
-
-  const showOverlayTemporarily = useCallback(() => {
-    setOverlayVisible(true);
-    clearTimeout(hideOverlayTimerRef.current);
-
-    if (isPlaying) {
-      hideOverlayTimerRef.current = setTimeout(() => {
-        setOverlayVisible(false);
-      }, 2500);
-    }
-  }, [isPlaying]);
-
-  const handleMouseEnterVideo = useCallback(() => {
-    setOverlayVisible(true);
-    clearTimeout(hideOverlayTimerRef.current);
-  }, []);
-
-  const handleMouseLeaveVideo = useCallback(() => {
-    if (isPlaying) {
-      setOverlayVisible(false);
-    }
-    clearTimeout(hideOverlayTimerRef.current);
-  }, [isPlaying]);
-
-  useEffect(() => {
-    showOverlayTemporarily();
-
-    return () => clearTimeout(hideOverlayTimerRef.current);
-  }, [isPlaying, showOverlayTemporarily]);
-
-  const playVideo = useCallback(async () => {
-    if (!videoRef.current) return;
-
-    try {
-      await videoRef.current.play();
-      setIsPlaying(true);
-      showOverlayTemporarily();
-    } catch {
-      setIsPlaying(false);
-    }
-  }, [showOverlayTemporarily]);
-
-  const pauseVideo = useCallback(() => {
-    videoRef.current?.pause();
-    setIsPlaying(false);
-    setOverlayVisible(true);
-  }, []);
-
-  const togglePlay = useCallback(() => {
-    if (!videoRef.current) return;
-
-    if (videoRef.current.paused) {
-      playVideo();
-    } else {
-      pauseVideo();
-    }
-  }, [playVideo, pauseVideo]);
-
-  const seekBy = useCallback(
-    (seconds) => {
-      if (!videoRef.current) return;
-
-      const nextTime = Math.max(
-        0,
-        Math.min(
-          duration || videoRef.current.duration || 0,
-          videoRef.current.currentTime + seconds
-        )
-      );
-
-      videoRef.current.currentTime = nextTime;
-      setCurrentTime(nextTime);
-      showOverlayTemporarily();
-    },
-    [duration, showOverlayTemporarily]
-  );
-
-  const seekTo = (value) => {
-    if (!videoRef.current) return;
-
-    const nextTime = Number(value);
-
-    videoRef.current.currentTime = nextTime;
-    setCurrentTime(nextTime);
-  };
-
-  const jumpToCue = useCallback(
-    (index, autoplay = true) => {
-      const cue = cuesRef.current[index];
-
-      if (!cue || !videoRef.current) return;
-
-      currentCueRef.current = index;
-      setCurrentCue(index);
-      setWordPopup(null);
-
-      videoRef.current.currentTime = cue.start;
-
-      if (autoplay) {
-        playVideo();
-      }
-    },
-    [playVideo]
-  );
-
-  const goToPreviousCard = useCallback(() => {
-    const previousIndex = currentCueRef.current - 1;
-
-    if (previousIndex >= 0) {
-      jumpToCue(previousIndex, true);
-    } else if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      setCurrentTime(0);
-    }
-  }, [jumpToCue]);
-
-  const goToNextCard = useCallback(() => {
-    const nextIndex = currentCueRef.current + 1;
-
-    if (nextIndex < cuesRef.current.length) {
-      jumpToCue(nextIndex, true);
-    }
-  }, [jumpToCue]);
-
-  const replayCurrentCard = useCallback(() => {
-    if (currentCueRef.current >= 0) {
-      jumpToCue(currentCueRef.current, true);
-    }
-  }, [jumpToCue]);
-
-  const handleTimeUpdate = () => {
-    if (!videoRef.current) return;
-
-    const time = videoRef.current.currentTime;
-    setCurrentTime(time);
-
-    const list = cuesRef.current;
-    const index = currentCueRef.current;
-
-    if (repeatRef.current && index >= 0 && list[index]) {
-      const current = list[index];
-      const next = list[index + 1];
-
-      const boundary = next ? next.start : current.end;
-
-      if (time >= boundary - 0.04) {
-        videoRef.current.currentTime = current.start;
-        return;
-      }
-    }
-
-    const detectedIndex = list.findIndex(
-      (cue) => time >= cue.start && time < cue.end
-    );
-
-    if (
-      detectedIndex !== -1 &&
-      detectedIndex !== currentCueRef.current
-    ) {
-      currentCueRef.current = detectedIndex;
-      setCurrentCue(detectedIndex);
-    }
-  };
-
-  const handleVideoLoaded = () => {
-    if (!videoRef.current) return;
-
-    setDuration(videoRef.current.duration || 0);
-    videoRef.current.volume = volume;
-    videoRef.current.playbackRate = playbackRate;
-  };
 
   const handleVideoFile = (file) => {
     if (!file) return;
@@ -530,65 +339,151 @@ export default function MoviePluss() {
     setVideoName(file.name);
     setCurrentTime(0);
     setDuration(0);
-    setCurrentCue(-1);
-    setIsPlaying(false);
-    setWordPopup(null);
-
+    setCurrentCueIndex(-1);
     currentCueRef.current = -1;
   };
 
-  const handleSubtitleFile = async (file, language) => {
+  const handleEnglishSubtitleFile = async (file) => {
     if (!file) return;
 
-    const result = await autoDecodeFile(file);
+    const text = await readSubtitleFile(file);
 
-    if (language === "en") {
-      setEnglishFile(file);
-      setEnglishEncoding(result.encoding);
-      setEnglishText(result.text);
-    } else {
-      setPersianFile(file);
-      setPersianEncoding(result.encoding);
-      setPersianText(result.text);
-    }
+    setEnglishSubtitleText(text);
+    setEnglishFileName(file.name);
   };
 
-  const changeSubtitleEncoding = async (
-    language,
-    encoding
-  ) => {
-    if (language === "en") {
-      setEnglishEncoding(encoding);
+  const handlePersianSubtitleFile = async (file) => {
+    if (!file) return;
 
-      if (englishFile) {
-        setEnglishText(
-          await decodeFile(englishFile, encoding)
-        );
-      }
-    } else {
-      setPersianEncoding(encoding);
+    const text = await readSubtitleFile(file);
 
-      if (persianFile) {
-        setPersianText(
-          await decodeFile(persianFile, encoding)
-        );
-      }
-    }
+    setPersianSubtitleText(text);
+    setPersianFileName(file.name);
   };
 
   const applySubtitles = () => {
-    const merged = mergeSubtitles(
-      englishText,
-      persianText
+    const mergedCues = mergeSubtitles(
+      englishSubtitleText,
+      persianSubtitleText
     );
 
-    setCues(merged);
-    cuesRef.current = merged;
-    setCurrentCue(-1);
+    cardRefs.current = [];
+    setCues(mergedCues);
+    setCurrentCueIndex(-1);
     currentCueRef.current = -1;
   };
 
-  const changeVolume = (value) => {
+  const togglePlay = async () => {
+    if (!videoRef.current) return;
+
+    if (videoRef.current.paused) {
+      try {
+        await videoRef.current.play();
+      } catch (error) {
+        console.error("Video play error:", error);
+      }
+    } else {
+      videoRef.current.pause();
+    }
+  };
+
+  const goToCard = useCallback(
+    (index, shouldPlay = true) => {
+      const cue = cues[index];
+
+      if (!cue || !videoRef.current) return;
+
+      videoRef.current.currentTime = cue.start;
+
+      currentCueRef.current = index;
+      setCurrentCueIndex(index);
+      setCurrentTime(cue.start);
+
+      if (shouldPlay) {
+        videoRef.current.play().catch(() => {});
+      }
+    },
+    [cues]
+  );
+
+  const goToNextCard = useCallback(() => {
+    const nextIndex = currentCueRef.current + 1;
+
+    if (nextIndex < cues.length) {
+      goToCard(nextIndex, true);
+    }
+  }, [cues.length, goToCard]);
+
+  const goToPreviousCard = useCallback(() => {
+    const previousIndex = currentCueRef.current - 1;
+
+    if (previousIndex >= 0) {
+      goToCard(previousIndex, true);
+      return;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+    }
+  }, [goToCard]);
+
+  const replayCurrentCard = () => {
+    if (currentCueIndex >= 0) {
+      goToCard(currentCueIndex, true);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (!videoRef.current) return;
+
+    const time = videoRef.current.currentTime;
+    setCurrentTime(time);
+
+    const currentIndex = currentCueRef.current;
+    const currentCue = cues[currentIndex];
+
+    /*
+      اگر تکرار کارت فعال باشد،
+      با رسیدن به انتهای کارت، فیلم به ابتدای همان کارت برمی‌گردد.
+    */
+    if (
+      repeatCurrentCard &&
+      currentCue &&
+      time >= currentCue.end
+    ) {
+      videoRef.current.currentTime = currentCue.start;
+      return;
+    }
+
+    const foundIndex = cues.findIndex(
+      (cue) => time >= cue.start && time < cue.end
+    );
+
+    if (
+      foundIndex !== -1 &&
+      foundIndex !== currentCueRef.current
+    ) {
+      currentCueRef.current = foundIndex;
+      setCurrentCueIndex(foundIndex);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (!videoRef.current) return;
+
+    setDuration(videoRef.current.duration || 0);
+    videoRef.current.volume = volume;
+  };
+
+  const handleSeek = (value) => {
+    if (!videoRef.current) return;
+
+    const time = Number(value);
+    videoRef.current.currentTime = time;
+    setCurrentTime(time);
+  };
+
+  const handleVolume = (value) => {
     const nextVolume = Number(value);
 
     setVolume(nextVolume);
@@ -604,14 +499,8 @@ export default function MoviePluss() {
     if (!videoRef.current) return;
 
     const nextMuted = !isMuted;
-
     videoRef.current.muted = nextMuted;
     setIsMuted(nextMuted);
-
-    if (!nextMuted && volume === 0) {
-      setVolume(1);
-      videoRef.current.volume = 1;
-    }
   };
 
   const toggleFullscreen = async () => {
@@ -626,261 +515,15 @@ export default function MoviePluss() {
     }
   };
 
-  const translateWord = async (rawWord) => {
-    const word = rawWord
-      .replace(/[^A-Za-z'-]/g, "")
-      .trim();
-
-    if (!word) return;
-
-    const key = word.toLowerCase();
-
-    if (translationCacheRef.current[key]) {
-      setWordPopup({
-        word,
-        translation: translationCacheRef.current[key],
-        loading: false,
-      });
-
-      return;
-    }
-
-    setWordPopup({
-      word,
-      translation: "",
-      loading: true,
-    });
-
-    try {
-      const response = await fetch(
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
-          word
-        )}&langpair=en|fa`
-      );
-
-      const data = await response.json();
-
-      const translation =
-        data?.responseData?.translatedText ||
-        "ترجمه پیدا نشد";
-
-      translationCacheRef.current[key] = translation;
-
-      setWordPopup({
-        word,
-        translation,
-        loading: false,
-      });
-    } catch {
-      setWordPopup({
-        word,
-        translation: "خطا در دریافت ترجمه",
-        loading: false,
-      });
-    }
-  };
-
-  const renderEnglish = (text, prefix) => {
-    return text.split(/(\s+)/).map((token, index) => {
-      if (/^\s+$/.test(token)) return token;
-
-      return (
-        <span
-          key={`${prefix}-${index}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            translateWord(token);
-          }}
-          title="برای ترجمه کلیک کنید"
-          style={{
-            cursor: "pointer",
-            borderBottom: `1px dotted ${COLORS.yellow}`,
-          }}
-        >
-          {token}
-        </span>
-      );
-    });
-  };
-
-  const handleTranslationPointerDown = (event) => {
-    if (!translationRef.current || !playerRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    const popupRect =
-      translationRef.current.getBoundingClientRect();
-
-    translationDragRef.current = {
-      active: true,
-      offsetX: event.clientX - popupRect.left,
-      offsetY: event.clientY - popupRect.top,
-    };
-  };
-
-  const handleTranslationPointerMove = useCallback(
-    (event) => {
-      if (
-        !translationDragRef.current?.active ||
-        !translationRef.current ||
-        !playerRef.current
-      ) {
-        return;
-      }
-
-      const playerRect =
-        playerRef.current.getBoundingClientRect();
-
-      const popupRect =
-        translationRef.current.getBoundingClientRect();
-
-      let left =
-        event.clientX -
-        playerRect.left -
-        translationDragRef.current.offsetX;
-
-      let top =
-        event.clientY -
-        playerRect.top -
-        translationDragRef.current.offsetY;
-
-      left = Math.max(
-        8,
-        Math.min(
-          left,
-          playerRect.width - popupRect.width - 8
-        )
-      );
-
-      top = Math.max(
-        8,
-        Math.min(
-          top,
-          playerRect.height - popupRect.height - 8
-        )
-      );
-
-      setTranslationPosition({
-        top,
-        left,
-        right: null,
-      });
-    },
-    []
-  );
-
-  const handleTranslationPointerUp = useCallback(() => {
-    if (translationDragRef.current) {
-      translationDragRef.current.active = false;
-    }
-  }, []);
-
   useEffect(() => {
-    window.addEventListener(
-      "pointermove",
-      handleTranslationPointerMove
-    );
-
-    window.addEventListener(
-      "pointerup",
-      handleTranslationPointerUp
-    );
-
-    return () => {
-      window.removeEventListener(
-        "pointermove",
-        handleTranslationPointerMove
-      );
-
-      window.removeEventListener(
-        "pointerup",
-        handleTranslationPointerUp
-      );
-    };
-  }, [
-    handleTranslationPointerMove,
-    handleTranslationPointerUp,
-  ]);
-
-  const handleVideoContextMenu = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
-  const handleVideoClick = () => {
-    togglePlay();
-  };
-
-  const touchRef = useRef({
-    startX: 0,
-    startY: 0,
-    holdTimer: null,
-    boosted: false,
-    swiped: false,
-  });
-
-  const handleTouchStart = (event) => {
-    const touch = event.touches[0];
-    touchRef.current.startX = touch.clientX;
-    touchRef.current.startY = touch.clientY;
-    touchRef.current.boosted = false;
-    touchRef.current.swiped = false;
-
-    clearTimeout(touchRef.current.holdTimer);
-    touchRef.current.holdTimer = setTimeout(() => {
-      if (videoRef.current && !videoRef.current.paused) {
-        touchRef.current.boosted = true;
-        videoRef.current.playbackRate = playbackRate * 2;
-      }
-    }, 350);
-  };
-
-  const handleTouchMove = (event) => {
-    const touch = event.touches[0];
-    const dx = touch.clientX - touchRef.current.startX;
-    const dy = touch.clientY - touchRef.current.startY;
-
-    if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
-      clearTimeout(touchRef.current.holdTimer);
-    }
-  };
-
-  const handleTouchEnd = (event) => {
-    clearTimeout(touchRef.current.holdTimer);
-
-    if (touchRef.current.boosted && videoRef.current) {
-      videoRef.current.playbackRate = playbackRate;
-      touchRef.current.boosted = false;
-      touchRef.current.swiped = true;
-      return;
-    }
-
-    const touch = event.changedTouches[0];
-    const dx = touch.clientX - touchRef.current.startX;
-    const dy = touch.clientY - touchRef.current.startY;
-
-    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      touchRef.current.swiped = true;
-
-      if (dx > 0) {
-        goToNextCard();
-      } else {
-        goToPreviousCard();
-      }
-    }
-  };
-
-  useEffect(() => {
-    const handleKeyboard = (event) => {
-      const tag = document.activeElement?.tagName;
+    const handleKeyDown = (event) => {
+      const element = document.activeElement;
+      const tagName = element?.tagName?.toLowerCase();
 
       if (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "SELECT"
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select"
       ) {
         return;
       }
@@ -899,48 +542,17 @@ export default function MoviePluss() {
         event.preventDefault();
         goToPreviousCard();
       }
-
-      if (event.key === "j") seekBy(-10);
-      if (event.key === "l") seekBy(10);
-      if (event.key === "m") toggleMute();
-      if (event.key === "f") toggleFullscreen();
-
-      if (event.key === "[") {
-        setPlaybackRate((old) => {
-          const index = SPEEDS.indexOf(old);
-          return SPEEDS[Math.max(0, index - 1)];
-        });
-      }
-
-      if (event.key === "]") {
-        setPlaybackRate((old) => {
-          const index = SPEEDS.indexOf(old);
-          return SPEEDS[
-            Math.min(SPEEDS.length - 1, index + 1)
-          ];
-        });
-      }
-
-      showOverlayTemporarily();
     };
 
-    window.addEventListener("keydown", handleKeyboard);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      window.removeEventListener("keydown", handleKeyboard);
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [
-    goToNextCard,
-    goToPreviousCard,
-    seekBy,
-    showOverlayTemporarily,
-    toggleFullscreen,
-    toggleMute,
-    togglePlay,
-  ]);
+  }, [goToNextCard, goToPreviousCard]);
 
   return (
-    <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
+    <div dir="rtl" className="app">
       <style>{`
         * {
           box-sizing: border-box;
@@ -948,143 +560,353 @@ export default function MoviePluss() {
 
         body {
           margin: 0;
-          background: ${COLORS.bg};
-          overflow-x: hidden;
-          font-family: 'Vazirmatn', sans-serif;
+          background: ${COLORS.background};
+          color: ${COLORS.text};
+          font-family: Vazirmatn, Tahoma, Arial, sans-serif;
         }
 
         button,
-        input,
-        textarea,
-        select {
-          font-family: 'Vazirmatn', sans-serif;
+        input {
+          font-family: inherit;
         }
 
-        input[type="range"] {
-          appearance: none;
-          width: 100%;
-          height: 5px;
-          background: transparent;
-          cursor: pointer;
+        button {
+          -webkit-tap-highlight-color: transparent;
         }
 
-        input[type="range"]::-webkit-slider-runnable-track {
-          height: 4px;
-          border-radius: 8px;
-          background: ${COLORS.border};
+        .app {
+          min-height: 100vh;
+          background:
+            radial-gradient(
+              circle at top center,
+              #182134 0,
+              ${COLORS.background} 42%
+            );
         }
 
-        input[type="range"]::-webkit-slider-thumb {
-          appearance: none;
-          width: 14px;
-          height: 14px;
-          margin-top: -5px;
-          border-radius: 50%;
-          background: ${COLORS.yellow};
-        }
-
-        .movie-player {
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-          border: 1px solid ${COLORS.border};
-          border-radius: 14px;
-          background: #000;
-          width: 100%;
-        }
-
-        .video-stage {
-          position: relative;
-          background: #000;
-          width: 100%;
-        }
-
-        .video-stage video {
-          display: block;
-          width: 100%;
-          min-height: 360px;
-          max-height: 62vh;
-          background: #000;
-        }
-
-        .cards-section {
-          background: ${COLORS.panel};
-          border-top: 1px solid ${COLORS.border};
-          border-bottom: 1px solid ${COLORS.border};
-          padding: 12px 14px 14px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-
-        .cards-header {
-          width: 100%;
-          max-width: 900px;
+        .header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 8px;
+          padding: 18px 24px;
+          border-bottom: 1px solid ${COLORS.border};
+          background: rgba(13, 16, 23, 0.8);
+          backdrop-filter: blur(10px);
+        }
+
+        .brand {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .brand-title {
+          margin: 0;
+          font-size: 22px;
+          font-weight: 900;
+        }
+
+        .brand-subtitle {
+          margin-top: 3px;
+          color: ${COLORS.muted};
+          font-size: 11px;
+        }
+
+        .upload-area {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr auto;
+          gap: 12px;
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 18px;
+        }
+
+        .file-box {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          min-height: 46px;
+          padding: 10px 12px;
+          overflow: hidden;
+          border: 1px dashed ${COLORS.border};
+          border-radius: 9px;
+          background: ${COLORS.panel};
+          color: ${COLORS.text};
+          cursor: pointer;
+          font-size: 12px;
+        }
+
+        .file-box:hover {
+          border-color: ${COLORS.yellow};
+        }
+
+        .file-name {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .apply-button {
+          min-height: 46px;
+          padding: 0 20px;
+          border: none;
+          border-radius: 9px;
+          background: ${COLORS.yellow};
+          color: #131313;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .apply-button:hover {
+          filter: brightness(1.07);
+        }
+
+        .page-content {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 0 18px 30px;
+        }
+
+        .player {
+          overflow: hidden;
+          border: 1px solid ${COLORS.border};
+          border-radius: 15px;
+          background: #000;
+          box-shadow: 0 22px 55px rgba(0, 0, 0, 0.3);
+        }
+
+        .video-area {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 360px;
+          background: #000;
+        }
+
+        .video-area video {
+          display: block;
+          width: 100%;
+          max-height: 65vh;
+          background: #000;
+          object-fit: contain;
+        }
+
+        .empty-video {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          min-height: 360px;
+          padding: 25px;
+          color: ${COLORS.muted};
+          text-align: center;
+          cursor: pointer;
+        }
+
+        .subtitle-overlay {
+          position: absolute;
+          right: 0;
+          left: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 7px;
+          padding: 0 20px;
+          pointer-events: none;
+        }
+
+        .english-subtitle,
+        .persian-subtitle {
+          max-width: 92%;
+          padding: 6px 13px;
+          border-radius: 7px;
+          background: rgba(0, 0, 0, 0.76);
+          text-align: center;
+          font-weight: 700;
+          line-height: 1.8;
+          text-shadow: 0 1px 3px #000;
+        }
+
+        .english-subtitle {
+          color: ${COLORS.yellow};
+          direction: ltr;
+        }
+
+        .persian-subtitle {
+          color: ${COLORS.teal};
+        }
+
+        .settings-button {
+          position: absolute;
+          top: 13px;
+          left: 13px;
+          z-index: 10;
+        }
+
+        .settings-panel {
+          position: absolute;
+          top: 54px;
+          left: 13px;
+          z-index: 20;
+          width: 255px;
+          padding: 14px;
+          border: 1px solid ${COLORS.border};
+          border-radius: 10px;
+          background: rgba(22, 27, 38, 0.97);
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        .setting-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin: 10px 0;
+          color: ${COLORS.text};
+          font-size: 12px;
+        }
+
+        .setting-range-label {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 5px;
+          color: ${COLORS.muted};
+          font-size: 11px;
+        }
+
+        .setting-range {
+          width: 100%;
+          accent-color: ${COLORS.yellow};
+        }
+
+        /*
+          کادر قابل اسکرول کارت‌ها
+          direction:ltr فقط برای عملکرد مطمئن scrollLeft است.
+          خود محتوای کارت‌ها RTL باقی می‌ماند.
+        */
+        .cards-section {
+          border-top: 1px solid ${COLORS.border};
+          border-bottom: 1px solid ${COLORS.border};
+          background: ${COLORS.panel};
+          padding: 13px 0 10px;
+        }
+
+        .cards-title {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          max-width: 1050px;
+          margin: 0 auto 10px;
+          padding: 0 16px;
           color: ${COLORS.muted};
           font-size: 12px;
-          margin-bottom: 9px;
         }
 
-        .cards-container {
-          display: flex;
-          flex-direction: row;
-          gap: 10px;
+        .cards-viewport {
+          width: 100%;
           overflow-x: auto;
-          padding: 4px 4px 10px;
+          overflow-y: hidden;
           direction: ltr;
           scroll-behavior: smooth;
-          width: 100%;
-          max-width: 900px;
-          justify-content: flex-start;
+          scrollbar-color: ${COLORS.border} ${COLORS.background};
+          scrollbar-width: thin;
         }
 
-        .cards-container::-webkit-scrollbar {
-          height: 6px;
+        .cards-viewport::-webkit-scrollbar {
+          height: 7px;
         }
 
-        .cards-container::-webkit-scrollbar-track {
-          background: ${COLORS.bg};
-          border-radius: 3px;
+        .cards-viewport::-webkit-scrollbar-track {
+          background: ${COLORS.background};
         }
 
-        .cards-container::-webkit-scrollbar-thumb {
+        .cards-viewport::-webkit-scrollbar-thumb {
+          border-radius: 10px;
           background: ${COLORS.border};
-          border-radius: 3px;
         }
 
-        .cards-container::-webkit-scrollbar-thumb:hover {
-          background: ${COLORS.muted};
+        /*
+          padding دو طرف باعث می‌شود اولین و آخرین کارت
+          نیز امکان رسیدن به وسط را داشته باشند.
+        */
+        .cards-list {
+          display: flex;
+          align-items: stretch;
+          gap: 12px;
+          width: max-content;
+          min-width: 100%;
+          padding: 4px max(16px, calc(50vw - 130px)) 12px;
         }
 
         .subtitle-card {
-          min-width: 230px;
-          max-width: 230px;
-          flex-shrink: 0;
-          padding: 11px;
-          transition: border-color 0.2s ease, background 0.2s ease;
+          width: 250px;
+          min-width: 250px;
+          min-height: 120px;
+          padding: 12px;
+          border: 1px solid ${COLORS.border};
+          border-radius: 11px;
+          background: ${COLORS.panelLight};
+          color: ${COLORS.text};
+          cursor: pointer;
+          direction: rtl;
+          text-align: right;
+          transition:
+            transform 0.2s ease,
+            border-color 0.2s ease,
+            background 0.2s ease,
+            box-shadow 0.2s ease;
         }
 
         .subtitle-card:hover {
-          border-color: ${COLORS.yellow} !important;
+          border-color: ${COLORS.yellow};
+          transform: translateY(-2px);
         }
 
-        .bottom-bar {
-          background: ${COLORS.panel};
-          padding: 10px 14px 12px;
+        .subtitle-card.active {
+          border-color: ${COLORS.yellow};
+          background: ${COLORS.active};
+          box-shadow: 0 0 0 1px rgba(247, 201, 72, 0.22);
+        }
+
+        .card-head {
           display: flex;
-          flex-direction: column;
-          gap: 8px;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+          color: ${COLORS.muted};
+          font-size: 10px;
         }
 
-        .bottom-bar-seek {
+        .card-english {
+          color: ${COLORS.yellow};
           direction: ltr;
+          text-align: left;
+          font-size: 12px;
+          line-height: 1.75;
         }
 
-        .bottom-bar-row {
+        .card-persian {
+          margin-top: 7px;
+          color: ${COLORS.teal};
+          font-size: 12px;
+          line-height: 1.8;
+        }
+
+        .controls {
+          padding: 11px 14px 14px;
+          background: ${COLORS.panel};
+        }
+
+        .progress {
+          width: 100%;
+          margin-bottom: 11px;
+          accent-color: ${COLORS.yellow};
+          cursor: pointer;
+        }
+
+        .control-row {
           display: flex;
           align-items: center;
           gap: 8px;
@@ -1092,602 +914,289 @@ export default function MoviePluss() {
           flex-wrap: wrap;
         }
 
-        .bottom-bar-main-group {
-          display: flex;
+        .control-button {
+          display: inline-flex;
           align-items: center;
-          gap: 8px;
+          justify-content: center;
+          width: 38px;
+          height: 34px;
+          border: 1px solid transparent;
+          border-radius: 8px;
+          background: rgba(0, 0, 0, 0.28);
+          color: ${COLORS.text};
+          cursor: pointer;
         }
 
-        .bottom-bar-main-group .play-btn {
-          width: 46px;
-          height: 40px;
+        .control-button:hover {
+          border-color: ${COLORS.border};
+          background: ${COLORS.panelLight};
         }
 
-        .bottom-bar-main-group .nav-btn {
-          width: 40px;
-          height: 40px;
+        .play-button {
+          width: 48px;
+          height: 39px;
+          color: #161616;
+          background: ${COLORS.yellow};
         }
 
-        .video-overlay-top {
-          position: absolute;
-          top: 10px;
-          left: 10px;
-          z-index: 60;
-          transition: opacity 0.2s ease;
+        .play-button:hover {
+          border-color: ${COLORS.yellow};
+          background: ${COLORS.yellow};
         }
 
-        .video-overlay-top.hidden {
-          opacity: 0;
-          pointer-events: none;
+        .repeat-button.active {
+          border-color: ${COLORS.yellow};
+          color: ${COLORS.yellow};
+          background: rgba(247, 201, 72, 0.13);
         }
 
-        .movie-player:fullscreen {
+        .volume-range {
+          width: 90px;
+          accent-color: ${COLORS.yellow};
+        }
+
+        .time {
+          min-width: 105px;
+          margin-left: auto;
+          color: ${COLORS.muted};
+          font-size: 12px;
+          white-space: nowrap;
+        }
+
+        .fullscreen-button {
+          margin-left: 0;
+        }
+
+        .player:fullscreen {
           width: 100vw;
           height: 100vh;
-          border: none !important;
-          border-radius: 0 !important;
+          border: none;
+          border-radius: 0;
           background: #000;
         }
 
-        .movie-player:fullscreen .video-stage {
-          flex: 1 1 auto;
+        .player:fullscreen .video-area {
+          flex: 1;
           min-height: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
         }
 
-        .movie-player:fullscreen .video-stage video {
-          width: auto;
-          height: auto;
-          max-width: 100%;
+        .player:fullscreen .video-area video {
           max-height: 100%;
-          min-height: 0;
-          object-fit: contain;
+          height: auto;
         }
 
-        .movie-player:fullscreen .cards-section {
-          max-height: 22vh;
-          flex-shrink: 0;
+        .player:fullscreen .cards-section {
+          max-height: 23vh;
         }
 
-        .movie-player:fullscreen .bottom-bar {
-          flex-shrink: 0;
+        .player:fullscreen .cards-viewport {
+          max-height: 18vh;
         }
 
-        .movie-player:fullscreen .subtitle-overlay .subtitle-text {
-          font-size: 24px !important;
-          padding: 8px 16px !important;
-        }
-
-        @media (max-width: 767px) {
-          .upload-section {
-            grid-template-columns: 1fr !important;
+        @media (max-width: 800px) {
+          .upload-area {
+            grid-template-columns: 1fr;
           }
 
-          .video-stage video {
-            min-height: 220px;
+          .apply-button {
+            min-height: 44px;
           }
 
-          .bottom-bar-row {
-            gap: 5px !important;
-          }
-
-          .time-display {
-            min-width: 84px !important;
-            font-size: 10px !important;
-          }
-
-          .subtitle-text {
-            font-size: 14px !important;
+          .video-area,
+          .empty-video {
+            min-height: 230px;
           }
 
           .subtitle-card {
-            min-width: 190px;
-            max-width: 190px;
+            width: 220px;
+            min-width: 220px;
           }
 
-          .movie-player:fullscreen .cards-section {
-            max-height: 26vh;
+          .cards-list {
+            padding-right: max(12px, calc(50vw - 110px));
+            padding-left: max(12px, calc(50vw - 110px));
           }
-        }
 
-        .translation-popup {
-          position: absolute;
-          z-index: 100;
-          width: min(310px, calc(100% - 32px));
-          user-select: none;
-          touch-action: none;
-        }
+          .volume-range {
+            display: none;
+          }
 
-        .translation-handle {
-          cursor: grab;
-          touch-action: none;
-        }
+          .time {
+            min-width: 90px;
+            font-size: 10px;
+          }
 
-        .translation-handle:active {
-          cursor: grabbing;
-        }
+          .header {
+            padding: 14px;
+          }
 
-        .upload-section {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr auto;
-          gap: 14px;
-          padding: 20px;
-          background: ${COLORS.panel};
-          border-bottom: 1px solid ${COLORS.border};
-          align-items: stretch;
-        }
-
-        .upload-section > * {
-          min-height: 42px;
-        }
-
-        .upload-section .apply-btn {
-          align-self: stretch;
-          min-height: 100%;
-          border: none;
-          border-radius: 8px;
-          background: ${COLORS.yellow};
-          color: #171717;
-          font-weight: 800;
-          cursor: pointer;
-          font-family: 'Vazirmatn', sans-serif;
-          font-size: 14px;
-          padding: 0 20px;
-          transition: all 0.2s ease;
-          letter-spacing: 0.5px;
-        }
-
-        .upload-section .apply-btn:hover {
-          transform: scale(1.02);
-          box-shadow: 0 4px 15px rgba(242, 201, 76, 0.3);
-        }
-
-        .upload-section .apply-btn:active {
-          transform: scale(0.98);
+          .page-content {
+            padding-right: 10px;
+            padding-left: 10px;
+          }
         }
       `}</style>
 
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "16px 20px",
-          borderBottom: `1px solid ${COLORS.border}`,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <Film size={28} color={COLORS.yellow} />
-
+      <header className="header">
+        <div className="brand">
+          <Play color={COLORS.yellow} fill={COLORS.yellow} />
           <div>
-            <div
-              style={{
-                fontSize: 23,
-                fontWeight: 900,
-              }}
-            >
-              فیلم پلاس
-            </div>
-
-            <div
-              style={{
-                color: COLORS.muted,
-                fontSize: 11,
-              }}
-            >
-              پلیر حرفه‌ای تمرین زبان با فیلم
+            <h1 className="brand-title">فیلم پلاس</h1>
+            <div className="brand-subtitle">
+              تمرین زبان با فیلم و زیرنویس
             </div>
           </div>
         </div>
 
-        <button
-          onClick={() => setFilesOpen((value) => !value)}
-          style={buttonStyle()}
-        >
-          فایل‌ها
-          {filesOpen ? (
-            <ChevronUp size={16} />
-          ) : (
-            <ChevronDown size={16} />
-          )}
-        </button>
+        <div style={{ color: COLORS.muted, fontSize: 12 }}>
+          کارت فعال در مرکز نمایش داده می‌شود
+        </div>
       </header>
 
-      {filesOpen && (
-        <section className="upload-section">
-          <label style={uploadBoxStyle()}>
-            <Film size={18} color={COLORS.yellow} />
-            {videoName || "انتخاب فایل ویدیو"}
+      <section className="upload-area">
+        <label className="file-box">
+          <Upload size={17} color={COLORS.yellow} />
+          <span className="file-name">
+            {videoName || "انتخاب فایل فیلم"}
+          </span>
 
-            <input
-              type="file"
-              accept="video/*"
-              onChange={(event) =>
-                handleVideoFile(event.target.files?.[0])
-              }
-              style={{ display: "none" }}
-            />
-          </label>
-
-          <SubtitleInput
-            language="en"
-            file={englishFile}
-            encoding={englishEncoding}
-            color={COLORS.yellow}
-            onFile={handleSubtitleFile}
-            onEncoding={changeSubtitleEncoding}
+          <input
+            hidden
+            type="file"
+            accept="video/*"
+            onChange={(event) =>
+              handleVideoFile(event.target.files?.[0])
+            }
           />
+        </label>
 
-          <SubtitleInput
-            language="fa"
-            file={persianFile}
-            encoding={persianEncoding}
-            color={COLORS.teal}
-            onFile={handleSubtitleFile}
-            onEncoding={changeSubtitleEncoding}
+        <label className="file-box">
+          <Upload size={17} color={COLORS.yellow} />
+          <span className="file-name">
+            {englishFileName || "زیرنویس انگلیسی (SRT / VTT)"}
+          </span>
+
+          <input
+            hidden
+            type="file"
+            accept=".srt,.vtt,.txt"
+            onChange={(event) =>
+              handleEnglishSubtitleFile(
+                event.target.files?.[0]
+              )
+            }
           />
+        </label>
 
-          <button
-            onClick={applySubtitles}
-            className="apply-btn"
-          >
-            اعمال زیرنویس‌ها
-          </button>
-        </section>
-      )}
+        <label className="file-box">
+          <Upload size={17} color={COLORS.teal} />
+          <span className="file-name">
+            {persianFileName || "زیرنویس فارسی (SRT / VTT)"}
+          </span>
 
-      <main
-        style={{
-          maxWidth: 1100,
-          margin: "0 auto",
-          padding: 20,
-        }}
-      >
-        <div
-          ref={playerRef}
-          className="movie-player"
+          <input
+            hidden
+            type="file"
+            accept=".srt,.vtt,.txt"
+            onChange={(event) =>
+              handlePersianSubtitleFile(
+                event.target.files?.[0]
+              )
+            }
+          />
+        </label>
+
+        <button
+          type="button"
+          className="apply-button"
+          onClick={applySubtitles}
         >
-          {!videoUrl ? (
-            <label
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                minHeight: 360,
-                gap: 12,
-                color: COLORS.muted,
-                cursor: "pointer",
-                fontFamily: "'Vazirmatn', sans-serif",
-              }}
-            >
-              <CirclePlay size={50} color={COLORS.yellow} />
-              برای انتخاب فیلم کلیک کنید
+          اعمال زیرنویس
+        </button>
+      </section>
 
-              <input
-                type="file"
-                accept="video/*"
-                onChange={(event) =>
-                  handleVideoFile(event.target.files?.[0])
-                }
-                style={{ display: "none" }}
-              />
-            </label>
-          ) : (
-            <>
-              <div
-                className="video-stage"
-                onMouseEnter={handleMouseEnterVideo}
-                onMouseLeave={handleMouseLeaveVideo}
-                onMouseMove={showOverlayTemporarily}
-              >
+      <main className="page-content">
+        <div ref={playerRef} className="player">
+          <div className="video-area">
+            {!videoUrl ? (
+              <label className="empty-video">
+                <Upload size={45} color={COLORS.yellow} />
+                <strong>برای انتخاب فیلم کلیک کنید</strong>
+                <span style={{ fontSize: 12 }}>
+                  بعد از انتخاب فیلم، زیرنویس‌ها را اعمال کنید.
+                </span>
+
+                <input
+                  hidden
+                  type="file"
+                  accept="video/*"
+                  onChange={(event) =>
+                    handleVideoFile(event.target.files?.[0])
+                  }
+                />
+              </label>
+            ) : (
+              <>
                 <video
                   ref={videoRef}
                   src={videoUrl}
-                  onLoadedMetadata={handleVideoLoaded}
+                  onLoadedMetadata={handleLoadedMetadata}
                   onTimeUpdate={handleTimeUpdate}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
-                  onDoubleClick={toggleFullscreen}
-                  onClick={handleVideoClick}
-                  onContextMenu={handleVideoContextMenu}
-                  onTouchStart={handleTouchStart}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
-                  style={{
-                    filter: `
-                      brightness(${brightness}%)
-                      contrast(${contrast}%)
-                    `,
-                    objectFit: "contain",
-                    touchAction: "pan-y",
-                  }}
+                  onClick={togglePlay}
                 />
-
-                {wordPopup && (
-                  <div
-                    ref={translationRef}
-                    className="translation-popup"
-                    style={{
-                      top: translationPosition.top,
-                      ...(translationPosition.left !== null
-                        ? { left: translationPosition.left }
-                        : { right: translationPosition.right }),
-                    }}
-                  >
-                    <div
-                      style={{
-                        overflow: "hidden",
-                        border: `1px solid ${COLORS.teal}`,
-                        borderRadius: 10,
-                        background: "rgba(12,14,20,.97)",
-                        boxShadow:
-                          "0 10px 35px rgba(0,0,0,.5)",
-                        fontFamily: "'Vazirmatn', sans-serif",
-                      }}
-                    >
-                      <div
-                        className="translation-handle"
-                        onPointerDown={
-                          handleTranslationPointerDown
-                        }
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "8px 11px",
-                          background: COLORS.active,
-                          color: COLORS.muted,
-                          fontSize: 11,
-                        }}
-                      >
-                        <span>برای جابه‌جایی بکشید</span>
-
-                        <button
-                          onPointerDown={(event) =>
-                            event.stopPropagation()
-                          }
-                          onClick={() => setWordPopup(null)}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: 26,
-                            height: 26,
-                            border: "none",
-                            borderRadius: 6,
-                            background: "transparent",
-                            color: COLORS.muted,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <X size={15} />
-                        </button>
-                      </div>
-
-                      <div
-                        style={{
-                          padding: 13,
-                          direction: "rtl",
-                        }}
-                      >
-                        <div
-                          style={{
-                            color: COLORS.yellow,
-                            direction: "ltr",
-                            textAlign: "left",
-                            fontWeight: 900,
-                          }}
-                        >
-                          {wordPopup.word}
-                        </div>
-
-                        <div
-                          style={{
-                            marginTop: 6,
-                            color: COLORS.teal,
-                            lineHeight: 1.8,
-                          }}
-                        >
-                          {wordPopup.loading
-                            ? "در حال دریافت ترجمه..."
-                            : wordPopup.translation}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {activeCue && (
                   <div
                     className="subtitle-overlay"
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      bottom: subtitleBottom,
-                      left: 0,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 5,
-                      padding: "0 18px",
-                      pointerEvents: "none",
-                    }}
+                    style={{ bottom: subtitleBottom }}
                   >
-                    {showEnglish && activeCue.en && (
+                    {showEnglish && activeCue.english && (
                       <div
-                        className="subtitle-text"
+                        className="english-subtitle"
                         style={{
-                          maxWidth: "92%",
-                          padding: subtitleBackground
-                            ? "5px 12px"
-                            : "2px 4px",
-                          borderRadius: 6,
-                          background: subtitleBackground
-                            ? "rgba(0,0,0,.78)"
-                            : "transparent",
-                          color: COLORS.yellow,
-                          fontSize: `${17 *
-                            (subtitleSize / 100)}px`,
-                          fontWeight: 700,
-                          textAlign: "center",
-                          direction: "ltr",
-                          pointerEvents: "auto",
-                          fontFamily: "'Vazirmatn', sans-serif",
+                          fontSize: `${16 * (subtitleSize / 100)}px`,
                         }}
                       >
-                        {renderEnglish(activeCue.en, "overlay")}
+                        {activeCue.english}
                       </div>
                     )}
 
-                    {showPersian && activeCue.fa && (
+                    {showPersian && activeCue.persian && (
                       <div
-                        className="subtitle-text"
+                        className="persian-subtitle"
                         style={{
-                          maxWidth: "92%",
-                          padding: subtitleBackground
-                            ? "5px 12px"
-                            : "2px 4px",
-                          borderRadius: 6,
-                          background: subtitleBackground
-                            ? "rgba(0,0,0,.78)"
-                            : "transparent",
-                          color: COLORS.teal,
-                          fontSize: `${17 *
-                            (subtitleSize / 100)}px`,
-                          fontWeight: 700,
-                          textAlign: "center",
-                          fontFamily: "'Vazirmatn', sans-serif",
+                          fontSize: `${16 * (subtitleSize / 100)}px`,
                         }}
                       >
-                        {activeCue.fa}
+                        {activeCue.persian}
                       </div>
                     )}
                   </div>
                 )}
 
-                <div
-                  className={`video-overlay-top ${
-                    overlayVisible ? "" : "hidden"
-                  }`}
-                  onClick={(event) => event.stopPropagation()}
-                  onContextMenu={(event) =>
-                    event.stopPropagation()
-                  }
-                  style={{ display: "flex", gap: 8 }}
-                >
-                  <ControlButton
-                    active={settingsOpen}
+                <div className="settings-button">
+                  <button
+                    type="button"
+                    className="control-button"
+                    title="تنظیمات"
                     onClick={() =>
                       setSettingsOpen((value) => !value)
                     }
                   >
-                    <Settings size={18} />
-                  </ControlButton>
-
-                  <ControlButton onClick={toggleFullscreen}>
-                    {isFullscreen ? (
-                      <Minimize size={18} />
+                    {settingsOpen ? (
+                      <X size={18} />
                     ) : (
-                      <Maximize size={18} />
+                      <Settings size={18} />
                     )}
-                  </ControlButton>
+                  </button>
                 </div>
 
                 {settingsOpen && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 60,
-                      left: 10,
-                      zIndex: 90,
-                      width: 260,
-                      padding: 14,
-                      border: `1px solid ${COLORS.border}`,
-                      borderRadius: 10,
-                      background: "rgba(20,23,31,.97)",
-                      fontFamily: "'Vazirmatn', sans-serif",
-                    }}
-                    onClick={(event) =>
-                      event.stopPropagation()
-                    }
-                    onContextMenu={(event) =>
-                      event.stopPropagation()
-                    }
-                  >
-                    <SettingRange
-                      label="روشنایی"
-                      value={brightness}
-                      min={50}
-                      max={150}
-                      onChange={setBrightness}
-                    />
-
-                    <SettingRange
-                      label="کنتراست"
-                      value={contrast}
-                      min={50}
-                      max={150}
-                      onChange={setContrast}
-                    />
-
-                    <SettingRange
-                      label="اندازه زیرنویس"
-                      value={subtitleSize}
-                      min={60}
-                      max={180}
-                      onChange={setSubtitleSize}
-                    />
-
-                    <SettingRange
-                      label="موقعیت زیرنویس"
-                      value={subtitleBottom}
-                      min={5}
-                      max={180}
-                      onChange={setSubtitleBottom}
-                    />
-
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        marginTop: 10,
-                        color: COLORS.text,
-                        fontSize: 12,
-                      }}
-                    >
-                      پس‌زمینه زیرنویس
-                      <input
-                        type="checkbox"
-                        checked={subtitleBackground}
-                        onChange={(event) =>
-                          setSubtitleBackground(
-                            event.target.checked
-                          )
-                        }
-                      />
-                    </label>
-
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        marginTop: 10,
-                        color: COLORS.text,
-                        fontSize: 12,
-                      }}
-                    >
-                      نمایش زیرنویس انگلیسی
+                  <div className="settings-panel">
+                    <div className="setting-row">
+                      <span>نمایش انگلیسی</span>
                       <input
                         type="checkbox"
                         checked={showEnglish}
@@ -1695,19 +1204,10 @@ export default function MoviePluss() {
                           setShowEnglish(event.target.checked)
                         }
                       />
-                    </label>
+                    </div>
 
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        marginTop: 10,
-                        color: COLORS.text,
-                        fontSize: 12,
-                      }}
-                    >
-                      نمایش زیرنویس فارسی
+                    <div className="setting-row">
+                      <span>نمایش فارسی</span>
                       <input
                         type="checkbox"
                         checked={showPersian}
@@ -1715,410 +1215,225 @@ export default function MoviePluss() {
                           setShowPersian(event.target.checked)
                         }
                       />
-                    </label>
+                    </div>
+
+                    <div style={{ marginTop: 15 }}>
+                      <div className="setting-range-label">
+                        <span>اندازه زیرنویس</span>
+                        <span>{subtitleSize}%</span>
+                      </div>
+
+                      <input
+                        className="setting-range"
+                        type="range"
+                        min="70"
+                        max="180"
+                        value={subtitleSize}
+                        onChange={(event) =>
+                          setSubtitleSize(
+                            Number(event.target.value)
+                          )
+                        }
+                      />
+                    </div>
+
+                    <div style={{ marginTop: 15 }}>
+                      <div className="setting-range-label">
+                        <span>موقعیت عمودی زیرنویس</span>
+                        <span>{subtitleBottom}px</span>
+                      </div>
+
+                      <input
+                        className="setting-range"
+                        type="range"
+                        min="15"
+                        max="180"
+                        value={subtitleBottom}
+                        onChange={(event) =>
+                          setSubtitleBottom(
+                            Number(event.target.value)
+                          )
+                        }
+                      />
+                    </div>
                   </div>
                 )}
+              </>
+            )}
+          </div>
+
+          {cues.length > 0 && (
+            <section className="cards-section">
+              <div className="cards-title">
+                <span>کارت‌های زیرنویس</span>
+
+                <span>
+                  {currentCueIndex >= 0
+                    ? `کارت ${currentCueIndex + 1} از ${
+                        cues.length
+                      }`
+                    : `${cues.length} کارت`}
+                </span>
               </div>
 
-              {/* ---------- کارت‌های زیرنویس (کارت فعال همیشه وسط + اسکرول خودکار) ---------- */}
-              {cues.length > 0 && (
-                <section
-                  ref={cardsRef}
-                  className="cards-section"
-                >
-                  <div className="cards-header">
-                    <span>کارت‌ها ({cues.length})</span>
-
-                    <span>
-                      کارت{" "}
-                      {currentCue >= 0 ? currentCue + 1 : "-"}
-                    </span>
-                  </div>
-
-                  <div className="cards-container">
-                    {cues.map((cue, index) => (
-                      <div
-                        key={index}
-                        data-card={index}
-                        className="subtitle-card"
-                        onClick={() => jumpToCue(index, true)}
-                        style={{
-                          border: `1px solid ${
-                            currentCue === index
-                              ? COLORS.yellow
-                              : COLORS.border
-                          }`,
-                          borderRadius: 10,
-                          background:
-                            currentCue === index
-                              ? COLORS.active
-                              : COLORS.card,
-                          cursor: "pointer",
-                          direction: "rtl",
-                          fontFamily: "'Vazirmatn', sans-serif",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            marginBottom: 8,
-                            color: COLORS.muted,
-                            fontSize: 10,
-                          }}
-                        >
-                          <span>کارت {index + 1}</span>
-                          <span>{formatTime(cue.start)}</span>
-                        </div>
-
-                        {cue.en && (
-                          <div
-                            style={{
-                              color: COLORS.yellow,
-                              fontSize: 12,
-                              lineHeight: 1.6,
-                              direction: "ltr",
-                              textAlign: "left",
-                            }}
-                          >
-                            {renderEnglish(
-                              cue.en,
-                              `card-${index}`
-                            )}
-                          </div>
-                        )}
-
-                        {cue.fa && (
-                          <div
-                            style={{
-                              marginTop: 5,
-                              color: COLORS.teal,
-                              fontSize: 12,
-                              lineHeight: 1.7,
-                              textAlign: "right",
-                            }}
-                          >
-                            {cue.fa}
-                          </div>
-                        )}
+              {/* کادر اسکرول کارت‌ها */}
+              <div
+                ref={cardsViewportRef}
+                className="cards-viewport"
+              >
+                <div className="cards-list">
+                  {cues.map((cue, index) => (
+                    <button
+                      key={cue.id}
+                      ref={(element) => {
+                        cardRefs.current[index] = element;
+                      }}
+                      type="button"
+                      className={`subtitle-card ${
+                        currentCueIndex === index
+                          ? "active"
+                          : ""
+                      }`}
+                      onClick={() => goToCard(index, true)}
+                    >
+                      <div className="card-head">
+                        <span>کارت {index + 1}</span>
+                        <span>{formatTime(cue.start)}</span>
                       </div>
-                    ))}
-                  </div>
-                </section>
-              )}
 
-              {/* ---------- نوار کنترل ثابت پایین ---------- */}
-              <div className="bottom-bar">
-                <input
-                  className="bottom-bar-seek"
-                  type="range"
-                  min="0"
-                  max={duration || 0}
-                  step="0.01"
-                  value={currentTime}
-                  onChange={(event) =>
-                    seekTo(event.target.value)
-                  }
-                  style={{
-                    accentColor: COLORS.yellow,
-                  }}
-                />
-
-                <div className="bottom-bar-row">
-                  <div className="bottom-bar-main-group">
-                    <ControlButton
-                      className="nav-btn"
-                      onClick={goToPreviousCard}
-                      title="کارت قبلی"
-                    >
-                      <ChevronLeft size={22} />
-                    </ControlButton>
-
-                    <ControlButton
-                      className="play-btn"
-                      onClick={togglePlay}
-                      title={isPlaying ? "توقف" : "پخش"}
-                    >
-                      {isPlaying ? (
-                        <Pause size={22} />
-                      ) : (
-                        <Play size={22} />
+                      {cue.english && (
+                        <div className="card-english">
+                          {cue.english}
+                        </div>
                       )}
-                    </ControlButton>
 
-                    <ControlButton
-                      className="nav-btn"
-                      onClick={goToNextCard}
-                      title="کارت بعدی"
-                    >
-                      <ChevronRight size={22} />
-                    </ControlButton>
-                  </div>
-
-                  <ControlButton
-                    onClick={replayCurrentCard}
-                    title="شروع مجدد کارت"
-                  >
-                    <RotateCcw size={18} />
-                  </ControlButton>
-
-                  <button
-                    onClick={() =>
-                      setRepeatOn((value) => !value)
-                    }
-                    title="فعال یا غیرفعال کردن تکرار جمله"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                      height: 32,
-                      padding: "0 10px",
-                      border: `1px solid ${
-                        repeatOn
-                          ? COLORS.yellow
-                          : COLORS.border
-                      }`,
-                      borderRadius: 7,
-                      background: repeatOn
-                        ? "rgba(242,201,76,.18)"
-                        : "rgba(0,0,0,.3)",
-                      color: repeatOn
-                        ? COLORS.yellow
-                        : COLORS.text,
-                      fontSize: 11,
-                      cursor: "pointer",
-                      fontFamily: "'Vazirmatn', sans-serif",
-                    }}
-                  >
-                    <RotateCw size={15} />
-                    تکرار
-                  </button>
-
-                  <select
-                    value={playbackRate}
-                    onChange={(event) =>
-                      setPlaybackRate(
-                        Number(event.target.value)
-                      )
-                    }
-                    style={selectStyle()}
-                    title="سرعت پخش"
-                  >
-                    {SPEEDS.map((speed) => (
-                      <option
-                        key={speed}
-                        value={speed}
-                        style={{
-                          background: COLORS.card,
-                          fontFamily: "'Vazirmatn', sans-serif",
-                        }}
-                      >
-                        {speed}x
-                      </option>
-                    ))}
-                  </select>
-
-                  <span
-                    className="time-display"
-                    style={{
-                      minWidth: 108,
-                      color: COLORS.text,
-                      fontSize: 11,
-                      direction: "ltr",
-                      fontFamily: "'Vazirmatn', sans-serif",
-                      marginInlineStart: "auto",
-                    }}
-                  >
-                    {formatTime(currentTime)} /{" "}
-                    {formatTime(duration)}
-                  </span>
+                      {cue.persian && (
+                        <div className="card-persian">
+                          {cue.persian}
+                        </div>
+                      )}
+                    </button>
+                  ))}
                 </div>
               </div>
-            </>
+            </section>
+          )}
+
+          {videoUrl && (
+            <section className="controls">
+              <input
+                className="progress"
+                type="range"
+                min="0"
+                max={duration || 0}
+                step="0.01"
+                value={currentTime}
+                onChange={(event) =>
+                  handleSeek(event.target.value)
+                }
+              />
+
+              <div className="control-row">
+                <button
+                  type="button"
+                  className="control-button"
+                  title="کارت قبلی"
+                  onClick={goToPreviousCard}
+                >
+                  <ChevronLeft size={21} />
+                </button>
+
+                <button
+                  type="button"
+                  className="control-button play-button"
+                  title={isPlaying ? "توقف" : "پخش"}
+                  onClick={togglePlay}
+                >
+                  {isPlaying ? (
+                    <Pause size={22} fill="currentColor" />
+                  ) : (
+                    <Play size={22} fill="currentColor" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="control-button"
+                  title="کارت بعدی"
+                  onClick={goToNextCard}
+                >
+                  <ChevronRight size={21} />
+                </button>
+
+                <button
+                  type="button"
+                  className="control-button"
+                  title="پخش دوباره کارت فعال"
+                  onClick={replayCurrentCard}
+                >
+                  <RotateCcw size={18} />
+                </button>
+
+                <button
+                  type="button"
+                  className={`control-button repeat-button ${
+                    repeatCurrentCard ? "active" : ""
+                  }`}
+                  title="تکرار کارت فعال"
+                  onClick={() =>
+                    setRepeatCurrentCard((value) => !value)
+                  }
+                >
+                  <Repeat2 size={18} />
+                </button>
+
+                <button
+                  type="button"
+                  className="control-button"
+                  title={isMuted ? "وصل کردن صدا" : "قطع صدا"}
+                  onClick={toggleMute}
+                >
+                  {isMuted ? (
+                    <VolumeX size={18} />
+                  ) : (
+                    <Volume2 size={18} />
+                  )}
+                </button>
+
+                <input
+                  className="volume-range"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={isMuted ? 0 : volume}
+                  onChange={(event) =>
+                    handleVolume(event.target.value)
+                  }
+                />
+
+                <span className="time">
+                  {formatTime(currentTime)} /{" "}
+                  {formatTime(duration)}
+                </span>
+
+                <button
+                  type="button"
+                  className="control-button fullscreen-button"
+                  title="تمام‌صفحه"
+                  onClick={toggleFullscreen}
+                >
+                  {isFullscreen ? (
+                    <Minimize size={18} />
+                  ) : (
+                    <Maximize size={18} />
+                  )}
+                </button>
+              </div>
+            </section>
           )}
         </div>
       </main>
     </div>
   );
-}
-
-function SubtitleInput({
-  language,
-  file,
-  encoding,
-  color,
-  onFile,
-  onEncoding,
-}) {
-  const label = language === "en" ? "زیرنویس انگلیسی" : "زیرنویس فارسی";
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          padding: "8px 10px",
-          border: `1px dashed ${COLORS.border}`,
-          borderRadius: 8,
-          background: COLORS.card,
-          color: COLORS.text,
-          fontSize: 11,
-          cursor: "pointer",
-          fontFamily: "'Vazirmatn', sans-serif",
-          minHeight: 42,
-        }}
-      >
-        <Subtitles size={15} color={color} />
-        <span style={{ flex: 1 }}>{file?.name || label}</span>
-
-        <input
-          type="file"
-          accept=".srt,.vtt,.txt"
-          onChange={(event) =>
-            onFile(event.target.files?.[0], language)
-          }
-          style={{ display: "none" }}
-        />
-      </label>
-
-      <select
-        value={encoding}
-        onChange={(event) =>
-          onEncoding(language, event.target.value)
-        }
-        style={selectStyle(true)}
-      >
-        {ENCODINGS.map((item) => (
-          <option
-            key={item.value}
-            value={item.value}
-            style={{ background: COLORS.card, fontFamily: "'Vazirmatn', sans-serif" }}
-          >
-            {item.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function SettingRange({ label, value, min, max, onChange }) {
-  return (
-    <label
-      style={{
-        display: "block",
-        marginBottom: 12,
-        color: COLORS.text,
-        fontSize: 11,
-        fontFamily: "'Vazirmatn', sans-serif",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 5,
-        }}
-      >
-        <span>{label}</span>
-        <span style={{ color: COLORS.muted }}>{value}</span>
-      </div>
-
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) =>
-          onChange(Number(event.target.value))
-        }
-      />
-    </label>
-  );
-}
-
-function ControlButton({
-  children,
-  onClick,
-  active = false,
-  title,
-  className = "",
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={className}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 34,
-        height: 32,
-        padding: 0,
-        border: `1px solid ${
-          active ? COLORS.yellow : "transparent"
-        }`,
-        borderRadius: 7,
-        background: active
-          ? "rgba(242,201,76,.18)"
-          : "rgba(0,0,0,.3)",
-        color: active ? COLORS.yellow : COLORS.text,
-        cursor: "pointer",
-        fontFamily: "'Vazirmatn', sans-serif",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function buttonStyle() {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    padding: "8px 12px",
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 8,
-    background: COLORS.card,
-    color: COLORS.text,
-    cursor: "pointer",
-    fontFamily: "'Vazirmatn', sans-serif",
-  };
-}
-
-function uploadBoxStyle() {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    minHeight: 42,
-    padding: "8px 12px",
-    border: `1px dashed ${COLORS.border}`,
-    borderRadius: 8,
-    background: COLORS.card,
-    color: COLORS.text,
-    fontSize: 12,
-    cursor: "pointer",
-    fontFamily: "'Vazirmatn', sans-serif",
-  };
-}
-
-function selectStyle(full = false) {
-  return {
-    width: full ? "100%" : "auto",
-    minHeight: 32,
-    padding: "3px 7px",
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 6,
-    outline: "none",
-    background: COLORS.card,
-    color: COLORS.text,
-    fontSize: 11,
-    cursor: "pointer",
-    fontFamily: "'Vazirmatn', sans-serif",
-  };
 }
