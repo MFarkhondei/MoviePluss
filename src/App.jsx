@@ -184,7 +184,7 @@ function selectStyle(full = false) {
   };
 }
 
-function SettingRange({ label, value, min, max, onChange }) {
+function SettingRange({ label, value, min, max, onChange, step = 0.05 }) {
   return (
     <label
       style={{
@@ -204,7 +204,7 @@ function SettingRange({ label, value, min, max, onChange }) {
         min={min}
         max={max}
         value={value}
-        step={0.05}
+        step={step}
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </label>
@@ -277,6 +277,9 @@ export default function MoviePluss() {
 
   const hideControlsTimerRef = useRef(null);
 
+  // ✅ FIX #2: جلوگیری از بستن فوری popup کلمه در موبایل
+  const suppressOutsideClickRef = useRef(false);
+
   const [videoUrl, setVideoUrl] = useState("");
   const [videoName, setVideoName] = useState("");
 
@@ -310,7 +313,7 @@ export default function MoviePluss() {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [cardsLayout, setCardsLayout] = useState("horizontal");
 
-  // ✅ contrast حذف شد
+  // contrast حذف شد
   const [brightness, setBrightness] = useState(100);
 
   const [subtitleSize, setSubtitleSize] = useState(100);
@@ -679,7 +682,6 @@ export default function MoviePluss() {
         cuesRef.current = cuesRef.current.map((c, i) =>
           i === cueIndex ? { ...c, fa: cachedFa } : c
         );
-
         return;
       }
 
@@ -702,8 +704,7 @@ export default function MoviePluss() {
         i === cueIndex ? { ...c, fa: faText } : c
       );
 
-      // ✅ overlay خودکار فارسی فعال نشود:
-      // setShowPersian(true) intentionally removed
+      // ✅ overlay فارسی خودکار فعال نشود
     } catch {
       const faText = "خطا در دریافت ترجمه";
       setCues((prev) => {
@@ -727,7 +728,8 @@ export default function MoviePluss() {
     return text.split(/(\s+)/).map((token, index) => {
       if (/^\s+$/.test(token)) return token;
 
-      const isWord = /^[A-Za-z]+(?:'[A-Za-z]+)?$/.test(token) || /^[A-Za-z]+$/.test(token);
+      const isWord =
+        /^[A-Za-z]+(?:'[A-Za-z]+)?$/.test(token) || /^[A-Za-z]+$/.test(token);
       const clickable = isWord && token.length > 1;
 
       if (clickable) {
@@ -742,9 +744,14 @@ export default function MoviePluss() {
               fontWeight: 700,
             }}
             onClick={(e) => {
+              // ✅ FIX #2: تا لحظه‌ای listener بیرون popup را نبندد
               e.preventDefault();
               e.stopPropagation();
+              suppressOutsideClickRef.current = true;
               translateWordPopup(token, cardIndex);
+              setTimeout(() => {
+                suppressOutsideClickRef.current = false;
+              }, 0);
             }}
           >
             {token}
@@ -766,8 +773,11 @@ export default function MoviePluss() {
     });
   };
 
+  // ✅ FIX #2: کلیک بیرون popup هنگام suppress انجام نشود
   useEffect(() => {
     const onDocClick = (e) => {
+      if (suppressOutsideClickRef.current) return;
+
       const target = e.target;
       if (!target) return;
 
@@ -779,6 +789,7 @@ export default function MoviePluss() {
 
       setWordPopup(null);
     };
+
     document.addEventListener("click", onDocClick, true);
     return () => document.removeEventListener("click", onDocClick, true);
   }, []);
@@ -1203,7 +1214,6 @@ export default function MoviePluss() {
                     e.stopPropagation();
                   }}
                   style={{
-                    // ✅ contrast حذف شد
                     filter: `brightness(${brightness}%)`,
                   }}
                 />
@@ -1337,10 +1347,9 @@ export default function MoviePluss() {
                         </button>
                       </div>
 
-                      {/* روشنایی */}
-                      <SettingRange label="روشنایی" value={brightness} min={50} max={150} onChange={setBrightness} />
+                      <SettingRange label="روشنایی" value={brightness} min={50} max={150} onChange={setBrightness} step={1} />
 
-                      {/* ✅ سرعت پخش اسلایدر پیوسته */}
+                      {/* سرعت پخش اسلایدر پیوسته */}
                       <label
                         style={{
                           display: "block",
@@ -1364,11 +1373,8 @@ export default function MoviePluss() {
                         />
                       </label>
 
-                      {/* اندازه زیرنویس */}
-                      <SettingRange label="اندازه زیرنویس" value={subtitleSize} min={60} max={180} onChange={setSubtitleSize} />
-
-                      {/* موقعیت زیرنویس */}
-                      <SettingRange label="موقعیت زیرنویس" value={subtitleBottom} min={5} max={180} onChange={setSubtitleBottom} />
+                      <SettingRange label="اندازه زیرنویس" value={subtitleSize} min={60} max={180} onChange={setSubtitleSize} step={1} />
+                      <SettingRange label="موقعیت زیرنویس" value={subtitleBottom} min={5} max={180} onChange={setSubtitleBottom} step={1} />
 
                       <label
                         style={{
@@ -1616,8 +1622,18 @@ export default function MoviePluss() {
                             </button>
                           )}
 
-                          {showPersian && cue.fa && (
-                            <div style={{ marginTop: 10, color: COLORS.teal, fontSize: 12, lineHeight: 1.7, textAlign: "right", whiteSpace: "pre-wrap" }}>
+                          {/* ✅ FIX #1: نمایش ترجمه داخل کارت فقط وابسته به cue.fa باشد، نه showPersian */}
+                          {cue.fa && cue.fa.trim() && (
+                            <div
+                              style={{
+                                marginTop: 10,
+                                color: COLORS.teal,
+                                fontSize: 12,
+                                lineHeight: 1.7,
+                                textAlign: "right",
+                                whiteSpace: "pre-wrap",
+                              }}
+                            >
                               {cue.fa}
                             </div>
                           )}
@@ -1636,33 +1652,15 @@ export default function MoviePluss() {
 
               <div className="bottom-quickbar">
                 <div className="bottom-quickbar-inner">
-                  <button
-                    className="quick-btn"
-                    onClick={goToPreviousCard}
-                    title="کارت قبلی"
-                    type="button"
-                    aria-label="کارت قبلی"
-                  >
+                  <button className="quick-btn" onClick={goToPreviousCard} title="کارت قبلی" type="button" aria-label="کارت قبلی">
                     <ChevronLeft size={26} />
                   </button>
 
-                  <button
-                    className="quick-btn play"
-                    onClick={togglePlay}
-                    title={isPlaying ? "توقف" : "شروع"}
-                    type="button"
-                    aria-label={isPlaying ? "توقف" : "شروع"}
-                  >
+                  <button className="quick-btn play" onClick={togglePlay} title={isPlaying ? "توقف" : "شروع"} type="button" aria-label={isPlaying ? "توقف" : "شروع"}>
                     {isPlaying ? <Pause size={26} /> : <Play size={26} />}
                   </button>
 
-                  <button
-                    className="quick-btn"
-                    onClick={goToNextCard}
-                    title="کارت بعدی"
-                    type="button"
-                    aria-label="کارت بعدی"
-                  >
+                  <button className="quick-btn" onClick={goToNextCard} title="کارت بعدی" type="button" aria-label="کارت بعدی">
                     <ChevronRight size={26} />
                   </button>
                 </div>
