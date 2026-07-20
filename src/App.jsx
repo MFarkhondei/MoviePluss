@@ -56,17 +56,13 @@ function formatTime(value = 0) {
   const seconds = Math.floor(value % 60);
 
   if (hours > 0) {
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
-      2,
-      "0"
-    )}:${String(seconds).padStart(2, "0")}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function parseSubtitleText(raw = "") {
   if (!raw.trim()) return [];
-
   return raw
     .replace(/\r/g, "")
     .replace(/^WEBVTT.*\n+/i, "")
@@ -187,7 +183,7 @@ function selectStyle(full = false) {
   };
 }
 
-function SettingRange({ label, value, min, max, onChange, step = 0.05 }) {
+function SettingRange({ label, value, min, max, onChange, step = 1 }) {
   return (
     <label
       style={{
@@ -216,7 +212,6 @@ function SettingRange({ label, value, min, max, onChange, step = 0.05 }) {
 
 function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) {
   const label = language === "en" ? "زیرنویس انگلیسی" : "زیرنویس فارسی";
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <label
@@ -237,7 +232,6 @@ function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) 
       >
         <Subtitles size={15} color={color} />
         <span style={{ flex: 1 }}>{file?.name || label}</span>
-
         <input
           type="file"
           accept=".srt,.vtt,.txt"
@@ -268,6 +262,7 @@ function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) 
 export default function MoviePluss() {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
+  const splitContainerRef = useRef(null);
   const cardsRef = useRef(null);
 
   const cuesRef = useRef([]);
@@ -282,9 +277,15 @@ export default function MoviePluss() {
 
   const dragStateRef = useRef({
     dragging: false,
-    startY: 0,
+    startClientY: 0,
     startCardsRatio: 0,
+    totalHeight: 1,
   });
+
+  // ===================== Split default 30%/70%
+  const [cardsRatio, setCardsRatio] = useState(0.30);
+  const minCardsRatio = 0.18;
+  const maxCardsRatio = 0.82;
 
   const [videoUrl, setVideoUrl] = useState("");
   const [videoName, setVideoName] = useState("");
@@ -305,7 +306,7 @@ export default function MoviePluss() {
   const [duration, setDuration] = useState(0);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(1);
+  const [volume] = useState(1);
 
   const [playbackRate, setPlaybackRate] = useState(1);
 
@@ -317,24 +318,15 @@ export default function MoviePluss() {
   const [filesOpen, setFilesOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-
   const [controlsVisible, setControlsVisible] = useState(true);
-
   const [cardsLayout, setCardsLayout] = useState("horizontal");
 
-  // تنظیمات تصویر
   const [brightness, setBrightness] = useState(100);
 
   const [subtitleSize, setSubtitleSize] = useState(100);
   const [subtitleBottom, setSubtitleBottom] = useState(70);
   const [subtitleBackground, setSubtitleBackground] = useState(true);
 
-  // ✅ ارتفاع split: نسبت ارتفاع کارت‌ها نسبت به کل بخش player (ویدیو+کارت‌ها)
-  const [cardsRatio, setCardsRatio] = useState(0.48); // 0..1
-  const minCardsRatio = 0.22;
-  const maxCardsRatio = 0.78;
-
-  // popup کلمه
   const [wordPopup, setWordPopup] = useState(null);
   const [cardTranslateLoading, setCardTranslateLoading] = useState({});
 
@@ -354,8 +346,8 @@ export default function MoviePluss() {
 
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.playbackRate = playbackRate;
       videoRef.current.volume = volume;
+      videoRef.current.playbackRate = playbackRate;
     }
   }, [playbackRate, volume]);
 
@@ -371,32 +363,9 @@ export default function MoviePluss() {
     if (videoUrl) return () => URL.revokeObjectURL(videoUrl);
   }, [videoUrl]);
 
-  useEffect(() => {
-    if (currentCue < 0 || !cardsRef.current) return;
-
-    const scrollContainer = cardsRef.current.querySelector(".cards-container");
-    if (!scrollContainer) return;
-
-    const cardElement = scrollContainer.querySelector(`[data-card="${currentCue}"]`);
-    if (!cardElement) return;
-
-    const isVertical = cardsLayout === "vertical";
-
-    if (isVertical) {
-      const targetTop =
-        cardElement.offsetTop - scrollContainer.clientHeight / 2 + cardElement.offsetHeight / 2;
-      scrollContainer.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
-    } else {
-      const targetLeft =
-        cardElement.offsetLeft - scrollContainer.clientWidth / 2 + cardElement.offsetWidth / 2;
-      scrollContainer.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
-    }
-  }, [currentCue, cardsLayout]);
-
   const showControlsTemporarily = useCallback(() => {
     setControlsVisible(true);
     clearTimeout(hideControlsTimerRef.current);
-
     if (isPlaying) {
       hideControlsTimerRef.current = setTimeout(() => setControlsVisible(false), 3500);
     }
@@ -443,12 +412,10 @@ export default function MoviePluss() {
   const seekBy = useCallback(
     (seconds) => {
       if (!videoRef.current) return;
-
       const nextTime = Math.max(
         0,
         Math.min(duration || videoRef.current.duration || 0, videoRef.current.currentTime + seconds)
       );
-
       videoRef.current.currentTime = nextTime;
       setCurrentTime(nextTime);
       showControlsTemporarily();
@@ -467,11 +434,9 @@ export default function MoviePluss() {
     (index, autoplay = true) => {
       const cue = cuesRef.current[index];
       if (!cue || !videoRef.current) return;
-
       currentCueRef.current = index;
       setCurrentCue(index);
       setWordPopup(null);
-
       videoRef.current.currentTime = cue.start;
       if (autoplay) playVideo();
     },
@@ -494,7 +459,6 @@ export default function MoviePluss() {
 
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
-
     const time = videoRef.current.currentTime;
     setCurrentTime(time);
 
@@ -528,7 +492,6 @@ export default function MoviePluss() {
 
   const handleVideoFile = (file) => {
     if (!file) return;
-
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     const url = URL.createObjectURL(file);
 
@@ -586,6 +549,7 @@ export default function MoviePluss() {
     }
   };
 
+  // ترجمه کلمه
   const fetchWordTranslation = useCallback(async (word) => {
     const clean = (word || "").trim();
     if (!clean) return "";
@@ -605,7 +569,6 @@ export default function MoviePluss() {
   const translateWordPopup = useCallback(
     async (word, cardIndex) => {
       if (!word || cardIndex === undefined || cardIndex === null) return;
-
       const clean = word.trim();
       if (!clean) return;
 
@@ -711,10 +674,7 @@ export default function MoviePluss() {
               e.preventDefault();
               e.stopPropagation();
               suppressOutsideClickRef.current = true;
-
-              // popup را همان لحظه ست می‌کنیم
               setWordPopup({ cardIndex, word: String(token), text: "ترجمه...", loading: true });
-
               translateWordPopup(token, cardIndex);
               setTimeout(() => (suppressOutsideClickRef.current = false), 120);
             }}
@@ -742,7 +702,6 @@ export default function MoviePluss() {
   useEffect(() => {
     const onDocClick = (e) => {
       if (suppressOutsideClickRef.current) return;
-
       const target = e.target;
       if (!target) return;
 
@@ -788,13 +747,17 @@ export default function MoviePluss() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
 
-  // Pointer drag برای split
   const onStartDrag = (e) => {
-    if (!playerRef.current) return;
+    const el = splitContainerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const totalH = rect.height || 1;
 
     dragStateRef.current.dragging = true;
-    dragStateRef.current.startY = e.clientY;
+    dragStateRef.current.startClientY = e.clientY;
     dragStateRef.current.startCardsRatio = cardsRatio;
+    dragStateRef.current.totalHeight = totalH;
 
     e.preventDefault();
     e.stopPropagation();
@@ -803,19 +766,12 @@ export default function MoviePluss() {
   useEffect(() => {
     const onMove = (e) => {
       if (!dragStateRef.current.dragging) return;
-      if (!playerRef.current) return;
 
-      const rect = playerRef.current.getBoundingClientRect();
-      const totalH = rect.height;
+      const { totalHeight, startClientY, startCardsRatio } = dragStateRef.current;
+      const dy = e.clientY - startClientY;
+      const deltaRatio = dy / totalHeight; // اگر پایین کشیدیم => کارت‌ها بیشتر
 
-      // y تغییر نسبت به کل
-      const dy = e.clientY - dragStateRef.current.startY;
-      const deltaRatio = dy / totalH;
-
-      // چون drag handle بین بالاست/پایین، جهت را طوری تنظیم می‌کنیم:
-      // اگر dy مثبت باشد یعنی پایین کشیده‌ایم => کارت‌ها بیشتر
-      let next = dragStateRef.current.startCardsRatio + deltaRatio;
-
+      let next = startCardsRatio + deltaRatio;
       next = Math.max(minCardsRatio, Math.min(maxCardsRatio, next));
       setCardsRatio(next);
     };
@@ -833,8 +789,8 @@ export default function MoviePluss() {
     };
   }, [cardsRatio]);
 
-  const videoBasis = useMemo(() => `${Math.round((1 - cardsRatio) * 1000) / 10}%`, [cardsRatio]);
-  const cardsBasis = useMemo(() => `${Math.round(cardsRatio * 1000) / 10}%`, [cardsRatio]);
+  const videoBasis = useMemo(() => `${(1 - cardsRatio) * 100}%`, [cardsRatio]);
+  const cardsBasis = useMemo(() => `${cardsRatio * 100}%`, [cardsRatio]);
 
   return (
     <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
@@ -861,24 +817,22 @@ export default function MoviePluss() {
         }
 
         .top-area {
+          flex: 1 1 auto;
+          min-height: 0;
           display: flex;
           flex-direction: column;
-          height: 100%;
-          min-height: 0;
         }
 
         .video-stage {
-          position: relative;
-          width: 100%;
           background: #000;
-          flex: 0 0 auto;
           min-height: 0;
+          position: relative;
         }
 
         .video-stage video {
-          display: block;
           width: 100%;
           height: 100%;
+          display: block;
           object-fit: contain;
           background: #000;
           touch-action: pan-y;
@@ -890,40 +844,21 @@ export default function MoviePluss() {
           background: rgba(255,255,255,0.04);
           border-top: 1px solid rgba(255,255,255,0.06);
           border-bottom: 1px solid rgba(255,255,255,0.06);
-          z-index: 5;
+          touch-action: none; /* ✅ مهم برای موبایل */
+          z-index: 10;
           flex: 0 0 auto;
         }
-
-        .split-handle:active {
-          background: rgba(242,201,76,0.12);
-        }
+        .split-handle:active { background: rgba(242,201,76,0.12); }
 
         .cards-section {
           background: ${COLORS.panel};
-          font-family: 'Vazirmatn', sans-serif;
-          flex: 1 1 auto;
-          min-height: 0;
           border-top: 1px solid ${COLORS.border};
+          min-height: 0;
+          flex: 1 1 auto;
           display: flex;
           flex-direction: column;
           overflow: hidden;
         }
-
-        .cards-container {
-          flex: 1 1 auto;
-          min-height: 0;
-          display: flex;
-          gap: 10px;
-          padding: 12px 14px 14px;
-          overflow: auto;
-          direction: ltr;
-          scroll-behavior: smooth;
-        }
-
-        .cards-container::-webkit-scrollbar { height: 6px; width: 6px; }
-        .cards-container::-webkit-scrollbar-track { background: ${COLORS.bg}; border-radius: 3px; }
-        .cards-container::-webkit-scrollbar-thumb { background: ${COLORS.border}; border-radius: 3px; }
-        .cards-container::-webkit-scrollbar-thumb:hover { background: ${COLORS.muted}; }
 
         .cards-header {
           display: flex;
@@ -956,34 +891,58 @@ export default function MoviePluss() {
           background: rgba(242,201,76,.15);
         }
 
-        .cards-section-horizontal .cards-container {
-          flex-direction: row;
-          overflow-x: auto;
-          overflow-y: hidden;
+        .cards-container {
+          flex: 1 1 auto;
+          min-height: 0;
+          display: flex;
+          gap: 10px;
+          padding: 12px 14px 14px;
+          overflow: auto;
+          scroll-behavior: smooth;
         }
 
-        .cards-section-horizontal .subtitle-card {
-          min-width: 230px;
-          max-width: 230px;
-          flex-shrink: 0;
-          padding: 11px;
+        .cards-container::-webkit-scrollbar { height: 6px; width: 6px; }
+        .cards-container::-webkit-scrollbar-track { background: ${COLORS.bg}; border-radius: 3px; }
+        .cards-container::-webkit-scrollbar-thumb { background: ${COLORS.border}; border-radius: 3px; }
+        .cards-container::-webkit-scrollbar-thumb:hover { background: ${COLORS.muted}; }
+
+        .cards-section-vertical .cards-container { flex-direction: column; direction: rtl; }
+        .cards-section-horizontal .cards-container { flex-direction: row; direction: ltr; }
+
+        .subtitle-card { position: relative; z-index: 1; }
+
+        .player-controls.hidden { opacity: 0; pointer-events: none; }
+
+        .settings-popup {
+          position: absolute;
+          top: 14px;
+          left: 14px;
+          z-index: 90;
+          width: 260px;
+          padding: 14px;
+          border: 1px solid ${COLORS.border};
+          border-radius: 10px;
+          background: rgba(20,23,31,.97);
+          fontFamily: "'Vazirmatn', sans-serif";
         }
 
-        .cards-section-vertical .cards-container {
-          flex-direction: column;
-          overflow-y: auto;
-          overflow-x: hidden;
+        .word-popup {
+          position: absolute;
+          z-index: 300;
+          top: -10px;
+          left: 0;
+          right: 0;
+          margin: 0 auto;
+          width: calc(100% - 18px);
+          max-width: 320px;
+          background: rgba(20,23,31,.97);
+          border: 1px solid ${COLORS.border};
+          border-radius: 12px;
+          box-shadow: 0 14px 40px rgba(0,0,0,.5);
+          padding: 10px 12px;
+          transform: translateY(-100%);
           direction: rtl;
-        }
-
-        .cards-section-vertical .subtitle-card {
-          width: 100%;
-          padding: 11px;
-        }
-
-        .subtitle-card {
-          position: relative;
-          z-index: 1; /* ✅ زیر overlay */
+          user-select: none;
         }
 
         .bottom-quickbar {
@@ -997,7 +956,6 @@ export default function MoviePluss() {
           );
           border-top: 1px solid rgba(255,255,255,0.06);
         }
-
         .bottom-quickbar-inner {
           direction: ltr;
           display: flex;
@@ -1026,7 +984,6 @@ export default function MoviePluss() {
           user-select: none;
           padding: 0;
         }
-
         .quick-btn.play {
           width: 140px;
           height: 64px;
@@ -1035,43 +992,8 @@ export default function MoviePluss() {
           border-color: rgba(242,201,76,.35);
           color: ${COLORS.yellow};
         }
-
-        .player-controls.hidden { opacity: 0; pointer-events: none; }
-
-        .word-popup {
-          position: absolute;
-          z-index: 300;
-          top: -10px;
-          left: 0;
-          right: 0;
-          margin: 0 auto;
-          width: calc(100% - 18px);
-          max-width: 320px;
-          background: rgba(20,23,31,.97);
-          border: 1px solid ${COLORS.border};
-          border-radius: 12px;
-          box-shadow: 0 14px 40px rgba(0,0,0,.5);
-          padding: 10px 12px;
-          transform: translateY(-100%);
-          direction: rtl;
-          user-select: none;
-        }
-
-        .settings-popup {
-          position: absolute;
-          top: 14px;
-          left: 14px;
-          z-index: 90;
-          width: 260px;
-          padding: 14px;
-          border: 1px solid ${COLORS.border};
-          border-radius: 10px;
-          background: rgba(20,23,31,.97);
-          fontFamily: "'Vazirmatn', sans-serif";
-        }
       `}</style>
 
-      {/* Header */}
       <header
         style={{
           display: "flex",
@@ -1123,9 +1045,7 @@ export default function MoviePluss() {
               font-size: 14px;
               padding: 0 20px;
             }
-            @media (max-width: 767px) {
-              .upload-section { grid-template-columns: 1fr !important; }
-            }
+            @media (max-width: 767px) { .upload-section { grid-template-columns: 1fr !important; } }
           `}</style>
 
           <label style={uploadBoxStyle()}>
@@ -1201,16 +1121,14 @@ export default function MoviePluss() {
             </label>
           ) : (
             <>
-              {/* Top split container */}
-              <div className="top-area" style={{ flex: 1, minHeight: 0 }}>
-                {/* VIDEO area */}
+              {/* ✅ split container that has real height */}
+              <div className="top-area" ref={splitContainerRef}>
                 <div
                   className="video-stage"
                   style={{
-                    flexBasis: videoBasis,
                     flex: `0 0 ${videoBasis}`,
-                    minHeight: 0,
                     height: videoBasis,
+                    minHeight: 0,
                   }}
                 >
                   <video
@@ -1231,11 +1149,9 @@ export default function MoviePluss() {
                     }}
                     style={{
                       filter: `brightness(${brightness}%)`,
-                      height: "100%",
                     }}
                   />
 
-                  {/* Player controls */}
                   <div
                     className={`player-controls ${controlsVisible ? "" : "hidden"}`}
                     style={{
@@ -1491,13 +1407,17 @@ export default function MoviePluss() {
                           }}
                         >
                           تکرار یک جمله
-                          <input type="checkbox" checked={repeatOn} onChange={(e) => setRepeatOn(e.target.checked)} />
+                          <input
+                            type="checkbox"
+                            checked={repeatOn}
+                            onChange={(e) => setRepeatOn(e.target.checked)}
+                          />
                         </label>
                       </div>
                     )}
                   </div>
 
-                  {/* ✅ Overlay: باید بالاتر از همه صفحات باشد */}
+                  {/* ✅ overlay بالای همه */}
                   {activeCue && (
                     <div
                       style={{
@@ -1511,7 +1431,7 @@ export default function MoviePluss() {
                         gap: 5,
                         padding: "0 18px",
                         pointerEvents: "none",
-                        zIndex: 1000, // ✅ بالا‌ترین لایه
+                        zIndex: 1000, // ✅ خیلی بالا
                       }}
                     >
                       {showEnglish && activeCue.en && (
@@ -1555,21 +1475,20 @@ export default function MoviePluss() {
                   )}
                 </div>
 
-                {/* Split handle */}
+                {/* ✅ handle */}
                 <div
                   className="split-handle"
                   onPointerDown={onStartDrag}
                   title="تغییر ارتفاع"
                 />
 
-                {/* Cards area */}
+                {/* Cards */}
                 <section
-                  className="cards-section cards-section-horizontal"
+                  className={`cards-section ${cardsLayout === "vertical" ? "cards-section-vertical" : "cards-section-horizontal"}`}
                   style={{
-                    flexBasis: cardsBasis,
                     flex: `0 0 ${cardsBasis}`,
+                    height: cardsBasis,
                     minHeight: 0,
-                    borderTop: "none",
                   }}
                 >
                   <div className="cards-header">
@@ -1599,7 +1518,7 @@ export default function MoviePluss() {
 
                   <div
                     ref={cardsRef}
-                    className={`cards-container`}
+                    className="cards-container"
                     style={{
                       flexDirection: cardsLayout === "vertical" ? "column" : "row",
                       overflowX: cardsLayout === "vertical" ? "hidden" : "auto",
@@ -1627,7 +1546,7 @@ export default function MoviePluss() {
                               cursor: "pointer",
                               direction: "rtl",
                               fontFamily: "'Vazirmatn', sans-serif",
-                              padding: cardsLayout === "horizontal" ? 11 : 11,
+                              padding: 11,
                               minWidth: cardsLayout === "horizontal" ? 230 : undefined,
                               maxWidth: cardsLayout === "horizontal" ? 230 : undefined,
                             }}
@@ -1656,29 +1575,13 @@ export default function MoviePluss() {
                               </div>
                             )}
 
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                marginBottom: 8,
-                                color: COLORS.muted,
-                                fontSize: 10,
-                              }}
-                            >
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, color: COLORS.muted, fontSize: 10 }}>
                               <span>کارت {index + 1}</span>
                               <span>{formatTime(cue.start)}</span>
                             </div>
 
                             {cue.en && (
-                              <div
-                                style={{
-                                  color: COLORS.yellow,
-                                  fontSize: 12,
-                                  lineHeight: 1.6,
-                                  direction: "ltr",
-                                  textAlign: "left",
-                                }}
-                              >
+                              <div style={{ color: COLORS.yellow, fontSize: 12, lineHeight: 1.6, direction: "ltr", textAlign: "left" }}>
                                 {renderEnglish(cue.en, `card-${index}`, index)}
                               </div>
                             )}
@@ -1704,23 +1607,13 @@ export default function MoviePluss() {
                                   fontSize: 11,
                                   fontWeight: 900,
                                 }}
-                                title="ترجمه کل متن کارت به فارسی"
                               >
                                 {translating ? "در حال ترجمه..." : "ترجمه به فارسی"}
                               </button>
                             )}
 
                             {cue.fa && cue.fa.trim() && (
-                              <div
-                                style={{
-                                  marginTop: 10,
-                                  color: COLORS.teal,
-                                  fontSize: 12,
-                                  lineHeight: 1.7,
-                                  textAlign: "right",
-                                  whiteSpace: "pre-wrap",
-                                }}
-                              >
+                              <div style={{ marginTop: 10, color: COLORS.teal, fontSize: 12, lineHeight: 1.7, textAlign: "right", whiteSpace: "pre-wrap" }}>
                                 {cue.fa}
                               </div>
                             )}
@@ -1739,33 +1632,15 @@ export default function MoviePluss() {
               {/* Bottom quickbar */}
               <div className="bottom-quickbar">
                 <div className="bottom-quickbar-inner">
-                  <button
-                    className="quick-btn"
-                    onClick={goToPreviousCard}
-                    title="کارت قبلی"
-                    type="button"
-                    aria-label="کارت قبلی"
-                  >
+                  <button className="quick-btn" onClick={goToPreviousCard} title="کارت قبلی" type="button" aria-label="کارت قبلی">
                     <ChevronLeft size={26} />
                   </button>
 
-                  <button
-                    className="quick-btn play"
-                    onClick={togglePlay}
-                    title={isPlaying ? "توقف" : "شروع"}
-                    type="button"
-                    aria-label={isPlaying ? "توقف" : "شروع"}
-                  >
+                  <button className="quick-btn play" onClick={togglePlay} title={isPlaying ? "توقف" : "شروع"} type="button" aria-label={isPlaying ? "توقف" : "شروع"}>
                     {isPlaying ? <Pause size={26} /> : <Play size={26} />}
                   </button>
 
-                  <button
-                    className="quick-btn"
-                    onClick={goToNextCard}
-                    title="کارت بعدی"
-                    type="button"
-                    aria-label="کارت بعدی"
-                  >
+                  <button className="quick-btn" onClick={goToNextCard} title="کارت بعدی" type="button" aria-label="کارت بعدی">
                     <ChevronRight size={26} />
                   </button>
                 </div>
