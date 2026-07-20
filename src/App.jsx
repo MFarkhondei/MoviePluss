@@ -29,7 +29,6 @@ import {
 import useEmblaCarousel from "embla-carousel-react";
 import "vazirmatn/Vazirmatn-font-face.css";
 
-import EmblaCarouselStyles from "./EmblaCarouselStyles.module.css"; // اگر نمی‌خوای، حذف کن
 
 const COLORS = {
   bg: "#0D0F15",
