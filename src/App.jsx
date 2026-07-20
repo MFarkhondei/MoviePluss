@@ -277,7 +277,7 @@ export default function MoviePluss() {
 
   const suppressOutsideClickRef = useRef(false);
 
-  // ذخیره آخرین زمان مشاهده
+  // ذخیره آخرین زمان مشاهده (بر اساس file.name)
   const savedTimeKeyRef = useRef(null);
 
   // Gesture controls
@@ -285,8 +285,6 @@ export default function MoviePluss() {
     pointerId: null,
     startY: 0,
     startVolume: 1,
-    basePlaybackRate: 1,
-    doubled: false,
   });
 
   const dragStateRef = useRef({
@@ -297,7 +295,7 @@ export default function MoviePluss() {
   });
 
   // ===== پیش‌فرض: کارت‌ها 40% و فیلم 60%
-  const [cardsRatio, setCardsRatio] = useState(0.40);
+  const [cardsRatio, setCardsRatio] = useState(0.4);
   const minCardsRatio = 0.18;
   const maxCardsRatio = 0.82;
 
@@ -347,21 +345,32 @@ export default function MoviePluss() {
 
   const activeCue = currentCue >= 0 ? cuesRef.current[currentCue] : null;
 
-  // ================== بازیابی آخرین زیرنویس/ویدیو هنگام باز شدن برنامه
+  const saveCurrentTime = useCallback(() => {
+    if (!savedTimeKeyRef.current) return;
+    if (!videoRef.current) return;
+    localStorage.setItem(savedTimeKeyRef.current, String(videoRef.current.currentTime || 0));
+  }, []);
+
+  // ذخیره قبل از خروج
+  useEffect(() => {
+    const beforeUnload = () => saveCurrentTime();
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [saveCurrentTime]);
+
+  // ================== بازیابی آخرین session (زیرنویس متنی + اعمال cues)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_LAST);
       if (!raw) return;
       const data = JSON.parse(raw);
 
-      if (data?.englishText) setEnglishText(data.englishText);
-      if (data?.persianText) setPersianText(data.persianText);
-      if (data?.englishEncoding) setEnglishEncoding(data.englishEncoding);
-      if (data?.persianEncoding) setPersianEncoding(data.persianEncoding);
+      if (typeof data?.englishText === "string") setEnglishText(data.englishText);
+      if (typeof data?.persianText === "string") setPersianText(data.persianText);
+      if (typeof data?.englishEncoding === "string") setEnglishEncoding(data.englishEncoding);
+      if (typeof data?.persianEncoding === "string") setPersianEncoding(data.persianEncoding);
 
-      // اعمال زیرنویس‌ها اگر هر دو متن موجود باشد
-      // (اگر بعداً ویدیو آپلود شود، کارت‌ها باید همینجا آماده باشند)
-      if (data?.englishText && data?.persianText) {
+      if (typeof data?.englishText === "string" && typeof data?.persianText === "string") {
         const merged = mergeSubtitles(data.englishText, data.persianText);
         setCues(merged);
         cuesRef.current = merged;
@@ -369,6 +378,25 @@ export default function MoviePluss() {
     } catch {}
   }, []);
 
+  const persistSession = useCallback(
+    (videoNameOverride) => {
+      try {
+        localStorage.setItem(
+          STORAGE_LAST,
+          JSON.stringify({
+            lastVideoName: videoNameOverride ?? videoName,
+            englishText,
+            persianText,
+            englishEncoding,
+            persianEncoding,
+          })
+        );
+      } catch {}
+    },
+    [videoName, englishText, persianText, englishEncoding, persianEncoding]
+  );
+
+  // ===== cues ref
   useEffect(() => {
     cuesRef.current = cues;
   }, [cues]);
@@ -381,13 +409,14 @@ export default function MoviePluss() {
     repeatRef.current = repeatOn;
   }, [repeatOn]);
 
+  // ===== apply volume/rate to video
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.volume = volume;
-      videoRef.current.playbackRate = playbackRate;
-    }
-  }, [playbackRate, volume]);
+    if (!videoRef.current) return;
+    videoRef.current.volume = volume;
+    videoRef.current.playbackRate = playbackRate;
+  }, [volume, playbackRate]);
 
+  // ===== fullscreen state
   useEffect(() => {
     const onFullscreenChange = () => {
       setIsFullscreen(document.fullscreenElement === playerRef.current);
@@ -396,45 +425,7 @@ export default function MoviePluss() {
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
 
-  useEffect(() => {
-    if (videoUrl) return () => URL.revokeObjectURL(videoUrl);
-  }, [videoUrl]);
-
-  const persistLastSession = useCallback(
-    (extra = {}) => {
-      try {
-        if (!videoName && !extra.videoName) return;
-
-        const record = {
-          lastVideoName: extra.videoName ?? videoName,
-          englishText,
-          persianText,
-          englishEncoding,
-          persianEncoding,
-          ...extra,
-        };
-        localStorage.setItem(STORAGE_LAST, JSON.stringify(record));
-      } catch {}
-    },
-    [videoName, englishText, persianText, englishEncoding, persianEncoding]
-  );
-
-  const saveCurrentTime = useCallback(() => {
-    if (!savedTimeKeyRef.current) return;
-    if (!videoRef.current) return;
-    localStorage.setItem(savedTimeKeyRef.current, String(videoRef.current.currentTime || 0));
-
-    // هم‌زمان آخرین سشن را هم ذخیره می‌کنیم
-    persistLastSession({ videoName });
-  }, [persistLastSession, videoName]);
-
-  useEffect(() => {
-    const beforeUnload = () => saveCurrentTime();
-    window.addEventListener("beforeunload", beforeUnload);
-    return () => window.removeEventListener("beforeunload", beforeUnload);
-  }, [saveCurrentTime]);
-
-  // اسکرول خودکار کارت
+  // ================== اسکرول خودکار کارت مثل قبل
   useEffect(() => {
     if (dragStateRef.current.dragging) return;
     if (currentCue < 0 || !cardsRef.current) return;
@@ -444,7 +435,6 @@ export default function MoviePluss() {
     if (!cardElement) return;
 
     const isVertical = cardsLayout === "vertical";
-
     if (isVertical) {
       const targetTop =
         cardElement.offsetTop - containerEl.clientHeight / 2 + cardElement.offsetHeight / 2;
@@ -461,16 +451,6 @@ export default function MoviePluss() {
     clearTimeout(hideControlsTimerRef.current);
     if (isPlaying) hideControlsTimerRef.current = setTimeout(() => setControlsVisible(false), 3500);
   }, [isPlaying]);
-
-  const handleMouseEnterPlayer = useCallback(() => {
-    setControlsVisible(true);
-    clearTimeout(hideControlsTimerRef.current);
-  }, []);
-
-  const handleMouseLeavePlayer = useCallback(() => {
-    setControlsVisible(false);
-    clearTimeout(hideControlsTimerRef.current);
-  }, []);
 
   useEffect(() => {
     showControlsTemporarily();
@@ -594,29 +574,27 @@ export default function MoviePluss() {
   const handleVideoFile = (file) => {
     if (!file) return;
     if (videoUrl) URL.revokeObjectURL(videoUrl);
-    const url = URL.createObjectURL(file);
 
+    const url = URL.createObjectURL(file);
     setVideoUrl(url);
     setVideoName(file.name);
 
     savedTimeKeyRef.current = `moviepluss:lastTime:${file.name}`;
+    persistSession(file.name);
 
     setCurrentTime(0);
     setDuration(0);
     setCurrentCue(-1);
     setIsPlaying(false);
     setWordPopup(null);
-
     currentCueRef.current = -1;
 
-    // اگر زیرنویس‌ها از سشن قبلی موجود باشند، همینجا اعمال می‌شوند
+    // اگر متن زیرنویس‌ها از قبل آماده بود، همینجا cues بساز
     if (englishText && persianText) {
       const merged = mergeSubtitles(englishText, persianText);
       setCues(merged);
       cuesRef.current = merged;
     }
-
-    persistLastSession({ videoName: file.name });
   };
 
   const handleSubtitleFile = async (file, language) => {
@@ -650,8 +628,7 @@ export default function MoviePluss() {
     cuesRef.current = merged;
     setCurrentCue(-1);
     currentCueRef.current = -1;
-
-    persistLastSession();
+    persistSession();
   };
 
   const toggleFullscreen = async () => {
@@ -663,6 +640,124 @@ export default function MoviePluss() {
     }
   };
 
+  // ===== gesture controls
+  const onVideoPointerDown = (e) => {
+    if (!videoRef.current) return;
+
+    gestureRef.current.pointerId = e.pointerId;
+    gestureRef.current.startY = e.clientY;
+    gestureRef.current.startVolume = videoRef.current.volume ?? volume;
+
+    // نگه داشتن = دو برابر سرعت
+    videoRef.current.playbackRate = playbackRate * 2;
+
+    setControlsVisible(false);
+
+    try {
+      videoRef.current.setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const onVideoPointerMove = (e) => {
+    if (!videoRef.current) return;
+    if (gestureRef.current.pointerId !== e.pointerId) return;
+
+    const dy = e.clientY - gestureRef.current.startY;
+
+    // بالا => صدا زیاد، پایین => صدا کم
+    const step = 0.0025;
+    let nextVol = gestureRef.current.startVolume - dy * step;
+    nextVol = Math.max(0, Math.min(1, nextVol));
+
+    videoRef.current.volume = nextVol;
+    setVolume(nextVol);
+  };
+
+  const endGesture = (e) => {
+    if (!videoRef.current) return;
+    if (gestureRef.current.pointerId !== e.pointerId) return;
+
+    videoRef.current.playbackRate = playbackRate;
+    gestureRef.current.pointerId = null;
+
+    setControlsVisible(true);
+    showControlsTemporarily();
+  };
+
+  // ===== split drag (ارتفاع)
+  const onStartDrag = (e) => {
+    const el = splitContainerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const totalH = rect.height || 1;
+
+    dragStateRef.current.dragging = true;
+    dragStateRef.current.startClientY = e.clientY;
+    dragStateRef.current.startCardsRatio = cardsRatio;
+    dragStateRef.current.totalHeight = totalH;
+
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!dragStateRef.current.dragging) return;
+
+      const { totalHeight, startClientY, startCardsRatio } = dragStateRef.current;
+      const dy = e.clientY - startClientY;
+      const deltaRatio = dy / totalHeight;
+
+      // کشیدن به پایین => کارت‌ها کمتر => cardsRatio کاهش
+      let next = startCardsRatio - deltaRatio;
+
+      next = Math.max(minCardsRatio, Math.min(maxCardsRatio, next));
+      setCardsRatio(next);
+    };
+
+    const onUp = () => {
+      dragStateRef.current.dragging = false;
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [cardsRatio]);
+
+  // ===== keyboard shortcuts
+  useEffect(() => {
+    const handleKeyboard = (event) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (event.code === "Space") {
+        event.preventDefault();
+        togglePlay();
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goToNextCard();
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goToPreviousCard();
+      }
+      if (event.key === "j") seekBy(-10);
+      if (event.key === "l") seekBy(10);
+      if (event.key === "f") toggleFullscreen();
+
+      showControlsTemporarily();
+    };
+
+    window.addEventListener("keydown", handleKeyboard);
+    return () => window.removeEventListener("keydown", handleKeyboard);
+  }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
+
+  // ===== word translation
   const fetchWordTranslation = useCallback(async (word) => {
     const clean = (word || "").trim();
     if (!clean) return "";
@@ -708,6 +803,26 @@ export default function MoviePluss() {
     [fetchWordTranslation]
   );
 
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (suppressOutsideClickRef.current) return;
+
+      const target = e.target;
+      if (!target) return;
+
+      const popup = target.closest?.(".word-popup");
+      if (popup) return;
+
+      const wordEl = target.closest?.("[data-word-token='1']");
+      if (wordEl) return;
+
+      setWordPopup(null);
+    };
+
+    document.addEventListener("click", onDocClick, true);
+    return () => document.removeEventListener("click", onDocClick, true);
+  }, []);
+
   const translateCardToPersian = async (cueIndex) => {
     const cue = cuesRef.current[cueIndex];
     if (!cue) return;
@@ -728,7 +843,9 @@ export default function MoviePluss() {
           next[cueIndex] = { ...next[cueIndex], fa: cachedFa };
           return next;
         });
-        cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: cachedFa } : c));
+        cuesRef.current = cuesRef.current.map((c, i) =>
+          i === cueIndex ? { ...c, fa: cachedFa } : c
+        );
         return;
       }
 
@@ -744,7 +861,9 @@ export default function MoviePluss() {
         next[cueIndex] = { ...next[cueIndex], fa: faText };
         return next;
       });
-      cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: faText } : c));
+      cuesRef.current = cuesRef.current.map((c, i) =>
+        i === cueIndex ? { ...c, fa: faText } : c
+      );
     } catch {
       const faText = "خطا در دریافت ترجمه";
       setCues((prev) => {
@@ -752,7 +871,9 @@ export default function MoviePluss() {
         next[cueIndex] = { ...next[cueIndex], fa: faText };
         return next;
       });
-      cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: faText } : c));
+      cuesRef.current = cuesRef.current.map((c, i) =>
+        i === cueIndex ? { ...c, fa: faText } : c
+      );
     } finally {
       setCardTranslateLoading((prev) => {
         const n = { ...prev };
@@ -809,144 +930,8 @@ export default function MoviePluss() {
     });
   };
 
-  useEffect(() => {
-    const onDocClick = (e) => {
-      if (suppressOutsideClickRef.current) return;
-      const target = e.target;
-      if (!target) return;
-
-      const popup = target.closest?.(".word-popup");
-      if (popup) return;
-
-      const wordEl = target.closest?.("[data-word-token='1']");
-      if (wordEl) return;
-
-      setWordPopup(null);
-    };
-
-    document.addEventListener("click", onDocClick, true);
-    return () => document.removeEventListener("click", onDocClick, true);
-  }, []);
-
-  useEffect(() => {
-    const handleKeyboard = (event) => {
-      const tag = document.activeElement?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-
-      if (event.code === "Space") {
-        event.preventDefault();
-        togglePlay();
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        goToNextCard();
-      }
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        goToPreviousCard();
-      }
-      if (event.key === "j") seekBy(-10);
-      if (event.key === "l") seekBy(10);
-      if (event.key === "f") toggleFullscreen();
-
-      showControlsTemporarily();
-    };
-
-    window.addEventListener("keydown", handleKeyboard);
-    return () => window.removeEventListener("keydown", handleKeyboard);
-  }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
-
-  // Split drag
-  const onStartDrag = (e) => {
-    const el = splitContainerRef.current;
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    const totalH = rect.height || 1;
-
-    dragStateRef.current.dragging = true;
-    dragStateRef.current.startClientY = e.clientY;
-    dragStateRef.current.startCardsRatio = cardsRatio;
-    dragStateRef.current.totalHeight = totalH;
-
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  useEffect(() => {
-    const onMove = (e) => {
-      if (!dragStateRef.current.dragging) return;
-
-      const { totalHeight, startClientY, startCardsRatio } = dragStateRef.current;
-      const dy = e.clientY - startClientY;
-      const deltaRatio = dy / totalHeight;
-
-      // کشیدن به پایین => کارت‌ها کمتر
-      let next = startCardsRatio - deltaRatio;
-
-      next = Math.max(minCardsRatio, Math.min(maxCardsRatio, next));
-      setCardsRatio(next);
-    };
-
-    const onUp = () => {
-      dragStateRef.current.dragging = false;
-    };
-
-    window.addEventListener("pointermove", onMove, { passive: false });
-    window.addEventListener("pointerup", onUp);
-
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-  }, [cardsRatio]);
-
   const videoBasis = useMemo(() => `${(1 - cardsRatio) * 100}%`, [cardsRatio]);
   const cardsBasis = useMemo(() => `${cardsRatio * 100}%`, [cardsRatio]);
-
-  // Gesture: دو برابر سرعت با نگه‌داشتن، تنظیم صدا با بالا/پایین
-  const onVideoPointerDown = (e) => {
-    if (!videoRef.current) return;
-
-    gestureRef.current.pointerId = e.pointerId;
-    gestureRef.current.startY = e.clientY;
-    gestureRef.current.startVolume = videoRef.current.volume ?? volume;
-    gestureRef.current.basePlaybackRate = playbackRate;
-    gestureRef.current.doubled = true;
-
-    try {
-      videoRef.current.setPointerCapture(e.pointerId);
-    } catch {}
-
-    videoRef.current.playbackRate = playbackRate * 2;
-    setControlsVisible(false);
-  };
-
-  const onVideoPointerMove = (e) => {
-    if (!videoRef.current) return;
-    if (gestureRef.current.pointerId !== e.pointerId) return;
-
-    const dy = e.clientY - gestureRef.current.startY;
-
-    const step = 0.0025;
-    let nextVol = gestureRef.current.startVolume - dy * step;
-    nextVol = Math.max(0, Math.min(1, nextVol));
-
-    videoRef.current.volume = nextVol;
-    setVolume(nextVol);
-  };
-
-  const endGesture = (e) => {
-    if (!videoRef.current) return;
-    if (gestureRef.current.pointerId !== e.pointerId) return;
-
-    videoRef.current.playbackRate = playbackRate;
-    gestureRef.current.pointerId = null;
-    gestureRef.current.doubled = false;
-
-    setControlsVisible(true);
-    showControlsTemporarily();
-  };
 
   return (
     <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
@@ -1244,8 +1229,8 @@ export default function MoviePluss() {
         <div
           ref={playerRef}
           className="movie-player"
-          onMouseEnter={handleMouseEnterPlayer}
-          onMouseLeave={handleMouseLeavePlayer}
+          onMouseEnter={() => setControlsVisible(true)}
+          onMouseLeave={() => setControlsVisible(false)}
           onMouseMove={showControlsTemporarily}
           style={{ minHeight: videoUrl ? 560 : 320 }}
         >
@@ -1800,20 +1785,21 @@ export default function MoviePluss() {
     </div>
   );
 
+  // ===== gesture handlers (بدون تکراری شدن endGesture)
   function onVideoPointerDown(e) {
     if (!videoRef.current) return;
+
     gestureRef.current.pointerId = e.pointerId;
     gestureRef.current.startY = e.clientY;
     gestureRef.current.startVolume = videoRef.current.volume ?? volume;
-    gestureRef.current.basePlaybackRate = playbackRate;
-    gestureRef.current.doubled = true;
+
+    videoRef.current.playbackRate = playbackRate * 2;
+
+    setControlsVisible(false);
 
     try {
       videoRef.current.setPointerCapture(e.pointerId);
     } catch {}
-
-    videoRef.current.playbackRate = playbackRate * 2;
-    setControlsVisible(false);
   }
 
   function onVideoPointerMove(e) {
@@ -1821,8 +1807,8 @@ export default function MoviePluss() {
     if (gestureRef.current.pointerId !== e.pointerId) return;
 
     const dy = e.clientY - gestureRef.current.startY;
-    const step = 0.0025;
 
+    const step = 0.0025;
     let nextVol = gestureRef.current.startVolume - dy * step;
     nextVol = Math.max(0, Math.min(1, nextVol));
 
@@ -1836,7 +1822,6 @@ export default function MoviePluss() {
 
     videoRef.current.playbackRate = playbackRate;
     gestureRef.current.pointerId = null;
-    gestureRef.current.doubled = false;
 
     setControlsVisible(true);
     showControlsTemporarily();
