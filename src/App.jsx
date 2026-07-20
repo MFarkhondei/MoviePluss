@@ -276,27 +276,67 @@ export default function MoviePluss() {
     };
   }, []);
 
+  /* ---------- تابع اختصاصی: همیشه کارت فعال را وسط کادر قرار بده ---------- */
+  const centerActiveCard = useCallback((smooth = true) => {
+    const container = cardsRef.current;
+    const index = currentCueRef.current;
+
+    if (!container || index < 0) return;
+
+    const cardElement = container.querySelector(
+      `[data-card="${index}"]`
+    );
+
+    if (!cardElement) return;
+
+    const targetLeft =
+      cardElement.offsetLeft -
+      container.clientWidth / 2 +
+      cardElement.offsetWidth / 2;
+
+    const maxScrollLeft =
+      container.scrollWidth - container.clientWidth;
+
+    const clampedLeft = Math.max(
+      0,
+      Math.min(targetLeft, Math.max(0, maxScrollLeft))
+    );
+
+    container.scrollTo({
+      left: clampedLeft,
+      behavior: smooth ? "smooth" : "auto",
+    });
+  }, []);
+
   useEffect(() => {
-    if (currentCue >= 0 && cardsRef.current) {
-      const cardElement = cardsRef.current.querySelector(
-        `[data-card="${currentCue}"]`
-      );
+    centerActiveCard(true);
+  }, [currentCue, centerActiveCard]);
 
-      if (cardElement) {
-        const container = cardsRef.current;
+  useEffect(() => {
+    if (!cardsRef.current) return;
 
-        const targetLeft =
-          cardElement.offsetLeft -
-          container.clientWidth / 2 +
-          cardElement.offsetWidth / 2;
+    const handleResize = () => centerActiveCard(false);
 
-        container.scrollTo({
-          left: Math.max(0, targetLeft),
-          behavior: "smooth",
-        });
-      }
+    window.addEventListener("resize", handleResize);
+
+    const resizeObserver = new ResizeObserver(() =>
+      centerActiveCard(false)
+    );
+
+    resizeObserver.observe(cardsRef.current);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
+    };
+  }, [centerActiveCard]);
+
+  useEffect(() => {
+    if (cues.length > 0) {
+      const timer = setTimeout(() => centerActiveCard(false), 60);
+      return () => clearTimeout(timer);
     }
-  }, [currentCue]);
+  }, [cues, centerActiveCard]);
 
   useEffect(() => {
     return () => {
@@ -943,7 +983,6 @@ export default function MoviePluss() {
           background: ${COLORS.yellow};
         }
 
-        /* ---------- ساختار کلی پلیر: ویدیو بالا / کارت‌ها وسط / کنترل‌ها پایین ---------- */
         .movie-player {
           display: flex;
           flex-direction: column;
@@ -968,7 +1007,6 @@ export default function MoviePluss() {
           background: #000;
         }
 
-        /* ---------- بخش کارت‌ها: وسط‌چین ---------- */
         .cards-section {
           background: ${COLORS.panel};
           border-top: 1px solid ${COLORS.border};
@@ -1027,13 +1065,13 @@ export default function MoviePluss() {
           max-width: 230px;
           flex-shrink: 0;
           padding: 11px;
+          transition: border-color 0.2s ease, background 0.2s ease;
         }
 
         .subtitle-card:hover {
           border-color: ${COLORS.yellow} !important;
         }
 
-        /* ---------- نوار کنترل ثابت پایین (شروع/توقف - کارت بعدی/قبلی) ---------- */
         .bottom-bar {
           background: ${COLORS.panel};
           padding: 10px 14px 12px;
@@ -1070,7 +1108,6 @@ export default function MoviePluss() {
           height: 40px;
         }
 
-        /* ---------- overlay ویدیو (فقط زیرنویس و ترجمه، محو‌شونده هنگام پخش) ---------- */
         .video-overlay-top {
           position: absolute;
           top: 10px;
@@ -1172,7 +1209,6 @@ export default function MoviePluss() {
           cursor: grabbing;
         }
 
-    /* ---------- بخش آپلود فایل‌ها ---------- */
         .upload-section {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr auto;
@@ -1347,7 +1383,6 @@ export default function MoviePluss() {
             </label>
           ) : (
             <>
-              {/* ---------- ۱) ویدیو در بالا ---------- */}
               <div
                 className="video-stage"
                 onMouseEnter={handleMouseEnterVideo}
@@ -1685,7 +1720,7 @@ export default function MoviePluss() {
                 )}
               </div>
 
-              {/* ---------- ۲) کارت‌های زیرنویس در وسط ---------- */}
+              {/* ---------- کارت‌های زیرنویس (کارت فعال همیشه وسط + اسکرول خودکار) ---------- */}
               {cues.length > 0 && (
                 <section
                   ref={cardsRef}
@@ -1772,7 +1807,7 @@ export default function MoviePluss() {
                 </section>
               )}
 
-              {/* ---------- ۳) نوار کنترل ثابت در پایین ---------- */}
+              {/* ---------- نوار کنترل ثابت پایین ---------- */}
               <div className="bottom-bar">
                 <input
                   className="bottom-bar-seek"
