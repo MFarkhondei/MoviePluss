@@ -259,6 +259,8 @@ function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) 
   );
 }
 
+const STORAGE_LAST = "moviepluss:lastSession:v1";
+
 export default function MoviePluss() {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
@@ -275,10 +277,10 @@ export default function MoviePluss() {
 
   const suppressOutsideClickRef = useRef(false);
 
-  // ذخیره آخرین زمان مشاهده (قبلی)
+  // ذخیره آخرین زمان مشاهده
   const savedTimeKeyRef = useRef(null);
 
-  // ===== Gesture controls روی صفحه ویدیو
+  // Gesture controls
   const gestureRef = useRef({
     pointerId: null,
     startY: 0,
@@ -303,7 +305,7 @@ export default function MoviePluss() {
   const [videoName, setVideoName] = useState("");
 
   const [englishFile, setEnglishFile] = useState(null);
-  const [persianFile, setPersianFile] = useState("");
+  const [persianFile, setPersianFile] = useState(null);
 
   const [englishText, setEnglishText] = useState("");
   const [persianText, setPersianText] = useState("");
@@ -345,6 +347,28 @@ export default function MoviePluss() {
 
   const activeCue = currentCue >= 0 ? cuesRef.current[currentCue] : null;
 
+  // ================== بازیابی آخرین زیرنویس/ویدیو هنگام باز شدن برنامه
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_LAST);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+
+      if (data?.englishText) setEnglishText(data.englishText);
+      if (data?.persianText) setPersianText(data.persianText);
+      if (data?.englishEncoding) setEnglishEncoding(data.englishEncoding);
+      if (data?.persianEncoding) setPersianEncoding(data.persianEncoding);
+
+      // اعمال زیرنویس‌ها اگر هر دو متن موجود باشد
+      // (اگر بعداً ویدیو آپلود شود، کارت‌ها باید همینجا آماده باشند)
+      if (data?.englishText && data?.persianText) {
+        const merged = mergeSubtitles(data.englishText, data.persianText);
+        setCues(merged);
+        cuesRef.current = merged;
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     cuesRef.current = cues;
   }, [cues]);
@@ -376,11 +400,33 @@ export default function MoviePluss() {
     if (videoUrl) return () => URL.revokeObjectURL(videoUrl);
   }, [videoUrl]);
 
+  const persistLastSession = useCallback(
+    (extra = {}) => {
+      try {
+        if (!videoName && !extra.videoName) return;
+
+        const record = {
+          lastVideoName: extra.videoName ?? videoName,
+          englishText,
+          persianText,
+          englishEncoding,
+          persianEncoding,
+          ...extra,
+        };
+        localStorage.setItem(STORAGE_LAST, JSON.stringify(record));
+      } catch {}
+    },
+    [videoName, englishText, persianText, englishEncoding, persianEncoding]
+  );
+
   const saveCurrentTime = useCallback(() => {
     if (!savedTimeKeyRef.current) return;
     if (!videoRef.current) return;
     localStorage.setItem(savedTimeKeyRef.current, String(videoRef.current.currentTime || 0));
-  }, []);
+
+    // هم‌زمان آخرین سشن را هم ذخیره می‌کنیم
+    persistLastSession({ videoName });
+  }, [persistLastSession, videoName]);
 
   useEffect(() => {
     const beforeUnload = () => saveCurrentTime();
@@ -388,7 +434,7 @@ export default function MoviePluss() {
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, [saveCurrentTime]);
 
-  // ================== اسکرول خودکار کارت
+  // اسکرول خودکار کارت
   useEffect(() => {
     if (dragStateRef.current.dragging) return;
     if (currentCue < 0 || !cardsRef.current) return;
@@ -534,7 +580,6 @@ export default function MoviePluss() {
     videoRef.current.volume = volume;
     videoRef.current.playbackRate = playbackRate;
 
-    // بازیابی آخرین زمان
     if (savedTimeKeyRef.current) {
       const saved = localStorage.getItem(savedTimeKeyRef.current);
       const t = saved ? Number(saved) : 0;
@@ -561,7 +606,17 @@ export default function MoviePluss() {
     setCurrentCue(-1);
     setIsPlaying(false);
     setWordPopup(null);
+
     currentCueRef.current = -1;
+
+    // اگر زیرنویس‌ها از سشن قبلی موجود باشند، همینجا اعمال می‌شوند
+    if (englishText && persianText) {
+      const merged = mergeSubtitles(englishText, persianText);
+      setCues(merged);
+      cuesRef.current = merged;
+    }
+
+    persistLastSession({ videoName: file.name });
   };
 
   const handleSubtitleFile = async (file, language) => {
@@ -595,6 +650,8 @@ export default function MoviePluss() {
     cuesRef.current = merged;
     setCurrentCue(-1);
     currentCueRef.current = -1;
+
+    persistLastSession();
   };
 
   const toggleFullscreen = async () => {
@@ -799,7 +856,7 @@ export default function MoviePluss() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
 
-  // ================== Split drag (همان قبل با جهت درست)
+  // Split drag
   const onStartDrag = (e) => {
     const el = splitContainerRef.current;
     if (!el) return;
@@ -824,7 +881,7 @@ export default function MoviePluss() {
       const dy = e.clientY - startClientY;
       const deltaRatio = dy / totalHeight;
 
-      // کشیدن به پایین => کارت‌ها کمتر => cardsRatio کاهش
+      // کشیدن به پایین => کارت‌ها کمتر
       let next = startCardsRatio - deltaRatio;
 
       next = Math.max(minCardsRatio, Math.min(maxCardsRatio, next));
@@ -847,25 +904,21 @@ export default function MoviePluss() {
   const videoBasis = useMemo(() => `${(1 - cardsRatio) * 100}%`, [cardsRatio]);
   const cardsBasis = useMemo(() => `${cardsRatio * 100}%`, [cardsRatio]);
 
-  // ================== Gesture handlers روی ویدیو
+  // Gesture: دو برابر سرعت با نگه‌داشتن، تنظیم صدا با بالا/پایین
   const onVideoPointerDown = (e) => {
     if (!videoRef.current) return;
-    // فقط تک‌لمس/پونتر اصلی
+
     gestureRef.current.pointerId = e.pointerId;
     gestureRef.current.startY = e.clientY;
     gestureRef.current.startVolume = videoRef.current.volume ?? volume;
     gestureRef.current.basePlaybackRate = playbackRate;
-    gestureRef.current.doubled = false;
+    gestureRef.current.doubled = true;
 
     try {
       videoRef.current.setPointerCapture(e.pointerId);
     } catch {}
-    // هر نوع نگه‌داشتن = دو برابر سرعت
-    // (طبق خواسته شما: "اگر انگشت روی صفحه فیلم نگه داشته شود سرعت دو برابر شود")
-    const doubled = playbackRate * 2;
-    videoRef.current.playbackRate = doubled;
-    gestureRef.current.doubled = true;
 
+    videoRef.current.playbackRate = playbackRate * 2;
     setControlsVisible(false);
   };
 
@@ -875,13 +928,10 @@ export default function MoviePluss() {
 
     const dy = e.clientY - gestureRef.current.startY;
 
-    // بالا => صدا زیاد شود (dy منفی => زیاد)
-    // پایین => صدا کم شود (dy مثبت => کم)
-    // ضریب تنظیم:
-    const step = 0.0025; // حساسیت
+    const step = 0.0025;
     let nextVol = gestureRef.current.startVolume - dy * step;
-
     nextVol = Math.max(0, Math.min(1, nextVol));
+
     videoRef.current.volume = nextVol;
     setVolume(nextVol);
   };
@@ -890,7 +940,6 @@ export default function MoviePluss() {
     if (!videoRef.current) return;
     if (gestureRef.current.pointerId !== e.pointerId) return;
 
-    // برگرداندن سرعت به حالت قبل
     videoRef.current.playbackRate = playbackRate;
     gestureRef.current.pointerId = null;
     gestureRef.current.doubled = false;
@@ -942,7 +991,7 @@ export default function MoviePluss() {
           display: block;
           object-fit: contain;
           background: #000;
-          touch-action: none; /* ✅ مهم برای gesture */
+          touch-action: none;
         }
 
         .split-handle {
@@ -1245,13 +1294,11 @@ export default function MoviePluss() {
                       saveCurrentTime();
                     }}
                     onDoubleClick={toggleFullscreen}
-                    // قبلاً روی click پلیر استارت/توقف داشتید؛ اینجا حفظ می‌شود
                     onClick={togglePlay}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                     }}
-                    // ✅ gestureها
                     onPointerDown={onVideoPointerDown}
                     onPointerMove={onVideoPointerMove}
                     onPointerUp={endGesture}
@@ -1755,7 +1802,6 @@ export default function MoviePluss() {
 
   function onVideoPointerDown(e) {
     if (!videoRef.current) return;
-
     gestureRef.current.pointerId = e.pointerId;
     gestureRef.current.startY = e.clientY;
     gestureRef.current.startVolume = videoRef.current.volume ?? volume;
@@ -1766,7 +1812,6 @@ export default function MoviePluss() {
       videoRef.current.setPointerCapture(e.pointerId);
     } catch {}
 
-    // نگه داشتن = دو برابر سرعت
     videoRef.current.playbackRate = playbackRate * 2;
     setControlsVisible(false);
   }
@@ -1776,12 +1821,11 @@ export default function MoviePluss() {
     if (gestureRef.current.pointerId !== e.pointerId) return;
 
     const dy = e.clientY - gestureRef.current.startY;
+    const step = 0.0025;
 
-    // بالا => زیاد، پایین => کم
-    const step = 0.0025; // حساسیت
     let nextVol = gestureRef.current.startVolume - dy * step;
-
     nextVol = Math.max(0, Math.min(1, nextVol));
+
     videoRef.current.volume = nextVol;
     setVolume(nextVol);
   }
@@ -1790,9 +1834,7 @@ export default function MoviePluss() {
     if (!videoRef.current) return;
     if (gestureRef.current.pointerId !== e.pointerId) return;
 
-    // برگشت سرعت به مقدار تنظیم‌شده
     videoRef.current.playbackRate = playbackRate;
-
     gestureRef.current.pointerId = null;
     gestureRef.current.doubled = false;
 
