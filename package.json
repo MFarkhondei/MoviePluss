@@ -12,7 +12,9 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "lucide-react": "^0.383.0",
-    "vazirmatn": "^33.0.3"
+    "vazirmatn": "^33.0.3",
+    "embla-carousel-react" : "^8.6.0",
+    "embla-carousel": "^8.6.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
