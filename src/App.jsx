@@ -277,7 +277,7 @@ export default function MoviePluss() {
 
   const hideControlsTimerRef = useRef(null);
 
-  // ✅ FIX #2: جلوگیری از بستن فوری popup کلمه در موبایل
+  // FIX #2: جلوگیری از بستن فوری popup کلمه
   const suppressOutsideClickRef = useRef(false);
 
   const [videoUrl, setVideoUrl] = useState("");
@@ -351,9 +351,7 @@ export default function MoviePluss() {
   }, []);
 
   useEffect(() => {
-    if (videoUrl) {
-      return () => URL.revokeObjectURL(videoUrl);
-    }
+    if (videoUrl) return () => URL.revokeObjectURL(videoUrl);
   }, [videoUrl]);
 
   useEffect(() => {
@@ -493,9 +491,7 @@ export default function MoviePluss() {
   const goToNextCard = useCallback(() => {
     const nextIndex = currentCueRef.current + 1;
 
-    if (nextIndex < cuesRef.current.length) {
-      jumpToCue(nextIndex, true);
-    }
+    if (nextIndex < cuesRef.current.length) jumpToCue(nextIndex, true);
   }, [jumpToCue]);
 
   const handleTimeUpdate = () => {
@@ -554,6 +550,7 @@ export default function MoviePluss() {
 
   const handleSubtitleFile = async (file, language) => {
     if (!file) return;
+
     const result = await autoDecodeFile(file);
 
     if (language === "en") {
@@ -704,7 +701,7 @@ export default function MoviePluss() {
         i === cueIndex ? { ...c, fa: faText } : c
       );
 
-      // ✅ overlay فارسی خودکار فعال نشود
+      // overlay خودکار فارسی فعال نشود
     } catch {
       const faText = "خطا در دریافت ترجمه";
       setCues((prev) => {
@@ -742,16 +739,29 @@ export default function MoviePluss() {
               cursor: "pointer",
               color: COLORS.yellow,
               fontWeight: 700,
+              userSelect: "none",
             }}
             onClick={(e) => {
-              // ✅ FIX #2: تا لحظه‌ای listener بیرون popup را نبندد
               e.preventDefault();
               e.stopPropagation();
+
+              // ✅ تست: مطمئن شو handler اجرا می‌شود
+              console.log("WORD CLICK:", { token, cardIndex });
+
+              // popup فوری برای اینکه اگر fetch دیر شد هم دیده شود
+              setWordPopup({
+                cardIndex,
+                word: String(token),
+                text: "ترجمه...",
+                loading: true,
+              });
+
               suppressOutsideClickRef.current = true;
               translateWordPopup(token, cardIndex);
+
               setTimeout(() => {
                 suppressOutsideClickRef.current = false;
-              }, 0);
+              }, 100);
             }}
           >
             {token}
@@ -773,7 +783,7 @@ export default function MoviePluss() {
     });
   };
 
-  // ✅ FIX #2: کلیک بیرون popup هنگام suppress انجام نشود
+  // FIX #2: کلیک خارج popup
   useEffect(() => {
     const onDocClick = (e) => {
       if (suppressOutsideClickRef.current) return;
@@ -1347,9 +1357,15 @@ export default function MoviePluss() {
                         </button>
                       </div>
 
-                      <SettingRange label="روشنایی" value={brightness} min={50} max={150} onChange={setBrightness} step={1} />
+                      <SettingRange
+                        label="روشنایی"
+                        value={brightness}
+                        min={50}
+                        max={150}
+                        onChange={setBrightness}
+                        step={1}
+                      />
 
-                      {/* سرعت پخش اسلایدر پیوسته */}
                       <label
                         style={{
                           display: "block",
@@ -1373,8 +1389,23 @@ export default function MoviePluss() {
                         />
                       </label>
 
-                      <SettingRange label="اندازه زیرنویس" value={subtitleSize} min={60} max={180} onChange={setSubtitleSize} step={1} />
-                      <SettingRange label="موقعیت زیرنویس" value={subtitleBottom} min={5} max={180} onChange={setSubtitleBottom} step={1} />
+                      <SettingRange
+                        label="اندازه زیرنویس"
+                        value={subtitleSize}
+                        min={60}
+                        max={180}
+                        onChange={setSubtitleSize}
+                        step={1}
+                      />
+
+                      <SettingRange
+                        label="موقعیت زیرنویس"
+                        value={subtitleBottom}
+                        min={5}
+                        max={180}
+                        onChange={setSubtitleBottom}
+                        step={1}
+                      />
 
                       <label
                         style={{
@@ -1622,7 +1653,7 @@ export default function MoviePluss() {
                             </button>
                           )}
 
-                          {/* ✅ FIX #1: نمایش ترجمه داخل کارت فقط وابسته به cue.fa باشد، نه showPersian */}
+                          {/* FIX #1: نمایش ترجمه داخل کارت فقط بر اساس cue.fa */}
                           {cue.fa && cue.fa.trim() && (
                             <div
                               style={{
