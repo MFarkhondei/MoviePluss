@@ -319,8 +319,10 @@ export default function MoviePluss() {
   const [playbackRate, setPlaybackRate] = useState(1);
 
   const [repeatOn, setRepeatOn] = useState(false);
-  const [showEnglish, setShowEnglish] = useState(true);
-  const [showPersian, setShowPersian] = useState(true);
+
+  // ✅ پیش‌فرض: هر دو خاموش
+  const [showEnglish, setShowEnglish] = useState(false);
+  const [showPersian, setShowPersian] = useState(false);
 
   const [filesOpen, setFilesOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -377,27 +379,19 @@ export default function MoviePluss() {
         scrollContainer.clientHeight / 2 +
         cardElement.offsetHeight / 2;
 
-      scrollContainer.scrollTo({
-        top: Math.max(0, targetTop),
-        behavior: "smooth",
-      });
+      scrollContainer.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
     } else {
       const targetLeft =
         cardElement.offsetLeft -
         scrollContainer.clientWidth / 2 +
         cardElement.offsetWidth / 2;
 
-      scrollContainer.scrollTo({
-        left: Math.max(0, targetLeft),
-        behavior: "smooth",
-      });
+      scrollContainer.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
     }
   }, [currentCue, cardsLayout]);
 
   useEffect(() => {
-    return () => {
-      if (videoUrl) URL.revokeObjectURL(videoUrl);
-    };
+    return () => { if (videoUrl) URL.revokeObjectURL(videoUrl); };
   }, [videoUrl]);
 
   const showControlsTemporarily = useCallback(() => {
@@ -405,9 +399,7 @@ export default function MoviePluss() {
     clearTimeout(hideControlsTimerRef.current);
 
     if (isPlaying) {
-      hideControlsTimerRef.current = setTimeout(() => {
-        setControlsVisible(false);
-      }, 3500);
+      hideControlsTimerRef.current = setTimeout(() => setControlsVisible(false), 3500);
     }
   }, [isPlaying]);
 
@@ -539,7 +531,6 @@ export default function MoviePluss() {
 
   const handleVideoFile = (file) => {
     if (!file) return;
-
     if (videoUrl) URL.revokeObjectURL(videoUrl);
 
     const url = URL.createObjectURL(file);
@@ -551,13 +542,11 @@ export default function MoviePluss() {
     setCurrentCue(-1);
     setIsPlaying(false);
     setWordPopup(null);
-
     currentCueRef.current = -1;
   };
 
   const handleSubtitleFile = async (file, language) => {
     if (!file) return;
-
     const result = await autoDecodeFile(file);
 
     if (language === "en") {
@@ -598,6 +587,7 @@ export default function MoviePluss() {
     }
   };
 
+  // ترجمه
   const translateWord = async (rawWord) => {
     const word = rawWord.replace(/[^A-Za-z'-]/g, "").trim();
     if (!word) return;
@@ -605,11 +595,7 @@ export default function MoviePluss() {
     const key = word.toLowerCase();
 
     if (translationCacheRef.current[key]) {
-      setWordPopup({
-        word,
-        translation: translationCacheRef.current[key],
-        loading: false,
-      });
+      setWordPopup({ word, translation: translationCacheRef.current[key], loading: false });
       return;
     }
 
@@ -621,9 +607,7 @@ export default function MoviePluss() {
       );
       const data = await response.json();
 
-      const translation =
-        data?.responseData?.translatedText || "ترجمه پیدا نشد";
-
+      const translation = data?.responseData?.translatedText || "ترجمه پیدا نشد";
       translationCacheRef.current[key] = translation;
 
       setWordPopup({ word, translation, loading: false });
@@ -644,10 +628,7 @@ export default function MoviePluss() {
             translateWord(token);
           }}
           title="برای ترجمه کلیک کنید"
-          style={{
-            cursor: "pointer",
-            borderBottom: `1px dotted ${COLORS.yellow}`,
-          }}
+          style={{ cursor: "pointer", borderBottom: `1px dotted ${COLORS.yellow}` }}
         >
           {token}
         </span>
@@ -660,11 +641,9 @@ export default function MoviePluss() {
     event.stopPropagation();
   };
 
-  const handleVideoClick = () => {
-    togglePlay();
-  };
+  const handleVideoClick = () => togglePlay();
 
-  // ترجمه پاپ‌آپ
+  // پاپ‌آپ ترجمه
   const handleTranslationPointerDown = (event) => {
     if (!translationRef.current || !playerRef.current) return;
 
@@ -672,7 +651,6 @@ export default function MoviePluss() {
     event.stopPropagation();
 
     const popupRect = translationRef.current.getBoundingClientRect();
-
     translationDragRef.current = {
       active: true,
       offsetX: event.clientX - popupRect.left,
@@ -687,10 +665,8 @@ export default function MoviePluss() {
     const playerRect = playerRef.current.getBoundingClientRect();
     const popupRect = translationRef.current.getBoundingClientRect();
 
-    let left =
-      event.clientX - playerRect.left - translationDragRef.current.offsetX;
-    let top =
-      event.clientY - playerRect.top - translationDragRef.current.offsetY;
+    let left = event.clientX - playerRect.left - translationDragRef.current.offsetX;
+    let top = event.clientY - playerRect.top - translationDragRef.current.offsetY;
 
     left = Math.max(8, Math.min(left, playerRect.width - popupRect.width - 8));
     top = Math.max(8, Math.min(top, playerRect.height - popupRect.height - 8));
@@ -705,7 +681,6 @@ export default function MoviePluss() {
   useEffect(() => {
     window.addEventListener("pointermove", handleTranslationPointerMove);
     window.addEventListener("pointerup", handleTranslationPointerUp);
-
     return () => {
       window.removeEventListener("pointermove", handleTranslationPointerMove);
       window.removeEventListener("pointerup", handleTranslationPointerUp);
@@ -763,7 +738,6 @@ export default function MoviePluss() {
 
     if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       touchRef.current.swiped = true;
-
       if (dx > 0) goToNextCard();
       else goToPreviousCard();
     }
@@ -856,13 +830,7 @@ export default function MoviePluss() {
           background: ${COLORS.yellow};
         }
 
-        .video-stage {
-          position: relative;
-          width: 100%;
-          background: #000;
-          flex: 0 0 auto;
-        }
-
+        .video-stage { position: relative; width: 100%; background: #000; flex: 0 0 auto; }
         .video-stage video {
           display: block;
           width: 100%;
@@ -895,24 +863,16 @@ export default function MoviePluss() {
           flex: 0 0 auto;
         }
 
-        .cards-layout-toggle {
-          display: flex;
-          gap: 4px;
-        }
-
+        .cards-layout-toggle { display: flex; gap: 4px; }
         .cards-layout-toggle button {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 26px;
-          height: 26px;
+          display: flex; align-items: center; justify-content: center;
+          width: 26px; height: 26px;
           border: 1px solid ${COLORS.border};
           border-radius: 6px;
           background: rgba(0,0,0,.3);
           color: ${COLORS.muted};
           cursor: pointer;
         }
-
         .cards-layout-toggle button.active {
           border-color: ${COLORS.yellow};
           color: ${COLORS.yellow};
@@ -935,28 +895,11 @@ export default function MoviePluss() {
         .cards-container::-webkit-scrollbar-thumb { background: ${COLORS.border}; border-radius: 3px; }
         .cards-container::-webkit-scrollbar-thumb:hover { background: ${COLORS.muted}; }
 
-        .cards-section-horizontal .cards-container {
-          flex-direction: row;
-          overflow-x: auto;
-          overflow-y: hidden;
-        }
-        .cards-section-horizontal .subtitle-card {
-          min-width: 230px;
-          max-width: 230px;
-          flex-shrink: 0;
-          padding: 11px;
-        }
+        .cards-section-horizontal .cards-container { flex-direction: row; overflow-x: auto; overflow-y: hidden; }
+        .cards-section-horizontal .subtitle-card { min-width: 230px; max-width: 230px; flex-shrink: 0; padding: 11px; }
 
-        .cards-section-vertical .cards-container {
-          flex-direction: column;
-          overflow-y: auto;
-          overflow-x: hidden;
-          direction: rtl;
-        }
-        .cards-section-vertical .subtitle-card {
-          width: 100%;
-          padding: 11px;
-        }
+        .cards-section-vertical .cards-container { flex-direction: column; overflow-y: auto; overflow-x: hidden; direction: rtl; }
+        .cards-section-vertical .subtitle-card { width: 100%; padding: 11px; }
 
         .subtitle-card:hover { border-color: ${COLORS.yellow} !important; }
 
@@ -977,7 +920,6 @@ export default function MoviePluss() {
           justify-content: center;
           align-items: center;
           gap: 10px;
-
           border: 1px solid rgba(255,255,255,0.06);
           border-radius: 16px;
           background: rgba(10,12,18,.62);
@@ -986,11 +928,8 @@ export default function MoviePluss() {
         }
 
         .quick-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 44px;
-          height: 44px;
+          display: flex; align-items: center; justify-content: center;
+          width: 44px; height: 44px;
           border-radius: 12px;
           border: 1px solid rgba(255,255,255,0.10);
           background: rgba(0,0,0,.25);
@@ -1000,18 +939,14 @@ export default function MoviePluss() {
         .quick-btn:active { transform: scale(0.98); }
 
         .quick-btn.play {
-          width: 56px;
-          height: 50px;
+          width: 56px; height: 50px;
           border-radius: 14px;
           background: rgba(242,201,76,.16);
           border-color: rgba(242,201,76,.35);
           color: ${COLORS.yellow};
         }
 
-        .player-controls.hidden {
-          opacity: 0;
-          pointer-events: none;
-        }
+        .player-controls.hidden { opacity: 0; pointer-events: none; }
 
         .translation-popup {
           position: absolute;
@@ -1020,7 +955,6 @@ export default function MoviePluss() {
           user-select: none;
           touch-action: none;
         }
-
         .translation-handle { cursor: grab; touch-action: none; }
         .translation-handle:active { cursor: grabbing; }
 
@@ -1045,10 +979,6 @@ export default function MoviePluss() {
           margin-bottom: 10px;
           padding-bottom: 10px;
           border-bottom: 1px solid rgba(255,255,255,0.06);
-        }
-
-        @media (max-width: 767px) {
-          .movie-player { min-height: 460px; }
         }
 
         .upload-section {
@@ -1083,6 +1013,7 @@ export default function MoviePluss() {
         .upload-section .apply-btn:active { transform: scale(0.98); }
 
         @media (max-width: 767px) {
+          .movie-player { min-height: 460px; }
           .upload-section { grid-template-columns: 1fr !important; }
         }
       `}</style>
@@ -1104,15 +1035,12 @@ export default function MoviePluss() {
           </div>
         </div>
 
-        {/* ✅ فلش‌های جدید برای فایل‌ها:
-              سمت راست: <     سمت چپ: >   */}
-        <button
-          onClick={() => setFilesOpen((v) => !v)}
-          style={buttonStyle()}
-        >
+        <button onClick={() => setFilesOpen((v) => !v)} style={buttonStyle()}>
           فایل‌ها
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: COLORS.muted }}>
-            <span style={{ fontWeight: 900, color: COLORS.yellow }}>{filesOpen ? "<" : ">"}</span>
+            <span style={{ fontWeight: 900, color: COLORS.yellow }}>
+              {filesOpen ? "<" : ">"}
+            </span>
           </span>
         </button>
       </header>
@@ -1203,9 +1131,7 @@ export default function MoviePluss() {
                   onTouchStart={handleTouchStart}
                   onTouchMove={handleTouchMove}
                   onTouchEnd={handleTouchEnd}
-                  style={{
-                    filter: `brightness(${brightness}%) contrast(${contrast}%)`,
-                  }}
+                  style={{ filter: `brightness(${brightness}%) contrast(${contrast}%)` }}
                 />
 
                 {wordPopup && (
@@ -1416,7 +1342,7 @@ export default function MoviePluss() {
                     </button>
                   </div>
 
-                  {/* ✅ تنظیمات با دکمه بستن X */}
+                  {/* ✅ تنظیمات با بستن X + موارد جدید */}
                   {settingsOpen && (
                     <div
                       className="settings-popup"
@@ -1432,7 +1358,7 @@ export default function MoviePluss() {
                         </div>
 
                         <button
-                          onClick={() => setSettingsOpen(false)} // ✅ امکان بستن حتماً
+                          onClick={() => setSettingsOpen(false)}
                           style={{
                             width: 30,
                             height: 30,
@@ -1509,12 +1435,31 @@ export default function MoviePluss() {
                           onChange={(event) => setShowPersian(event.target.checked)}
                         />
                       </label>
+
+                      {/* ✅ گزینه تکرار در تنظیمات */}
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginTop: 10,
+                          color: COLORS.text,
+                          fontSize: 12,
+                        }}
+                      >
+                        تکرار یک جمله
+                        <input
+                          type="checkbox"
+                          checked={repeatOn}
+                          onChange={(event) => setRepeatOn(event.target.checked)}
+                        />
+                      </label>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* ✅ کارت‌ها (وسط) */}
+              {/* ✅ کارت‌ها */}
               {cues.length > 0 ? (
                 <section ref={cardsRef} className={`cards-section cards-section-${cardsLayout}`}>
                   <div className="cards-header">
@@ -1613,19 +1558,36 @@ export default function MoviePluss() {
                 </section>
               )}
 
-              {/* ✅ نوار پایین فقط ۳ دکمه با جابجایی قبلی/بعدی */}
+              {/* ✅ نوار پایین: فقط شکل فلش‌ها برعکس شد، کارکرد تغییر نکرد */}
               <div className="bottom-quickbar">
                 <div className="bottom-quickbar-inner">
-                  <button className="quick-btn" onClick={goToNextCard} title="کارت بعدی" type="button">
-                    <ChevronLeft size={22} />
+                  {/* این دکمه کارکردش Next است، ولی شکل فلش برعکس (ChevronRight) */}
+                  <button
+                    className="quick-btn"
+                    onClick={goToNextCard}
+                    title="کارت بعدی"
+                    type="button"
+                  >
+                    <ChevronRight size={22} />
                   </button>
 
-                  <button className="quick-btn play" onClick={togglePlay} title={isPlaying ? "توقف" : "شروع"} type="button">
+                  <button
+                    className="quick-btn play"
+                    onClick={togglePlay}
+                    title={isPlaying ? "توقف" : "شروع"}
+                    type="button"
+                  >
                     {isPlaying ? <Pause size={22} /> : <Play size={22} />}
                   </button>
 
-                  <button className="quick-btn" onClick={goToPreviousCard} title="کارت قبلی" type="button">
-                    <ChevronRight size={22} />
+                  {/* این دکمه کارکردش Previous است، ولی شکل فلش برعکس (ChevronLeft) */}
+                  <button
+                    className="quick-btn"
+                    onClick={goToPreviousCard}
+                    title="کارت قبلی"
+                    type="button"
+                  >
+                    <ChevronLeft size={22} />
                   </button>
                 </div>
               </div>
