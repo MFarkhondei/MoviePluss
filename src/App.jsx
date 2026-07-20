@@ -330,7 +330,8 @@ export default function MoviePluss() {
 
   const [cardTranslateLoading, setCardTranslateLoading] = useState({});
 
-  const activeCue = currentCue >= 0 ? cues[currentCue] : null;
+  // ✅ FIX #1: activeCue از cuesRef می‌خواند تا overlay همیشه ترجمه‌های جدید را بگیرد
+  const activeCue = currentCue >= 0 ? cuesRef.current[currentCue] : null;
 
   useEffect(() => {
     cuesRef.current = cues;
@@ -629,7 +630,6 @@ export default function MoviePluss() {
       const clean = word.trim();
       if (!clean) return;
 
-      // show loading popup above card
       setWordPopup({
         cardIndex,
         word: clean,
@@ -668,14 +668,12 @@ export default function MoviePluss() {
     [fetchWordTranslation]
   );
 
-  // ترجمه روی کل متن کارت به فارسی (در صورت نیاز)
   const translateCardToPersian = async (cueIndex) => {
     const cue = cuesRef.current[cueIndex];
     if (!cue) return;
 
     if (!cue.en?.trim()) return;
 
-    // اگر قبلاً ترجمه شده، دوباره نمی‌گیریم
     if (cue.fa && cue.fa.trim()) return;
 
     if (cardTranslateLoading[cueIndex]) return;
@@ -767,6 +765,8 @@ export default function MoviePluss() {
               fontWeight: 700,
             }}
             onClick={(e) => {
+              // ✅ FIX #3: preventDefault هم اضافه شد
+              e.preventDefault();
               e.stopPropagation();
               translateWordPopup(token, cardIndex);
             }}
@@ -819,14 +819,14 @@ export default function MoviePluss() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
 
-  // بستن popup با کلیک خارج
+  // ✅ FIX #3: بستن popup با چک کردن .word-popup انجام می‌شود (به جای id)
   useEffect(() => {
     const onDocClick = (e) => {
       const target = e.target;
       if (!target) return;
 
-      const popup = document.getElementById("word-translation-popup");
-      if (popup && popup.contains(target)) return;
+      const popup = target.closest?.(".word-popup");
+      if (popup) return;
 
       const wordEl = target.closest?.("[data-word-token='1']");
       if (wordEl) return;
@@ -1053,7 +1053,6 @@ export default function MoviePluss() {
 
         .player-controls.hidden { opacity: 0; pointer-events: none; }
 
-        /* word popup: بالای کارت */
         .word-popup {
           position: absolute;
           z-index: 300;
@@ -1266,67 +1265,97 @@ export default function MoviePluss() {
                   onClick={(e) => e.stopPropagation()}
                   onContextMenu={(e) => e.stopPropagation()}
                 >
-                  <input
-                    type="range"
-                    min="0"
-                    max={duration || 0}
-                    step="0.01"
-                    value={currentTime}
-                    onChange={(event) => seekTo(event.target.value)}
-                    style={{ direction: "ltr", accentColor: COLORS.yellow }}
-                  />
-
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-                    <span
+                  {/* ✅ FIX #2: چیدمان یک‌خطی با nowrap */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <input
+                      type="range"
+                      min="0"
+                      max={duration || 0}
+                      step="0.01"
+                      value={currentTime}
+                      onChange={(event) => seekTo(event.target.value)}
                       style={{
-                        color: COLORS.text,
-                        fontSize: 11,
-                        minWidth: 108,
                         direction: "ltr",
-                        fontFamily: "'Vazirmatn', sans-serif",
+                        accentColor: COLORS.yellow,
+                        width: "100%",
                       }}
-                    >
-                      {formatTime(currentTime)} / {formatTime(duration)}
-                    </span>
-                    <div style={{ flex: 1 }} />
+                    />
 
-                    <button
-                      onClick={() => setSettingsOpen((v) => !v)}
+                    <div
                       style={{
-                        width: 38,
-                        height: 36,
-                        borderRadius: 10,
-                        border: `1px solid ${COLORS.border}`,
-                        background: "rgba(0,0,0,.25)",
-                        color: COLORS.text,
-                        cursor: "pointer",
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        flexWrap: "nowrap",
+                        whiteSpace: "nowrap",
                       }}
-                      title="تنظیمات"
                     >
-                      <Settings size={18} />
-                    </button>
+                      <span
+                        style={{
+                          color: COLORS.text,
+                          fontSize: 11,
+                          minWidth: 210,
+                          direction: "ltr",
+                          fontFamily: "'Vazirmatn', sans-serif",
+                          flex: "0 0 auto",
+                        }}
+                      >
+                        {formatTime(currentTime)} / {formatTime(duration)}{" "}
+                        <span style={{ color: COLORS.muted }}>
+                          (-{formatTime(Math.max(0, (duration || 0) - currentTime))})
+                        </span>
+                      </span>
 
-                    <button
-                      onClick={toggleFullscreen}
-                      style={{
-                        width: 38,
-                        height: 36,
-                        borderRadius: 10,
-                        border: `1px solid ${COLORS.border}`,
-                        background: "rgba(0,0,0,.25)",
-                        color: COLORS.text,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                      title="تمام صفحه"
-                    >
-                      {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-                    </button>
+                      <div style={{ flex: 1 }} />
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          flex: "0 0 auto",
+                        }}
+                      >
+                        <button
+                          onClick={() => setSettingsOpen((v) => !v)}
+                          style={{
+                            width: 38,
+                            height: 36,
+                            borderRadius: 10,
+                            border: `1px solid ${COLORS.border}`,
+                            background: "rgba(0,0,0,.25)",
+                            color: COLORS.text,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          title="تنظیمات"
+                        >
+                          <Settings size={18} />
+                        </button>
+
+                        <button
+                          onClick={toggleFullscreen}
+                          style={{
+                            width: 38,
+                            height: 36,
+                            borderRadius: 10,
+                            border: `1px solid ${COLORS.border}`,
+                            background: "rgba(0,0,0,.25)",
+                            color: COLORS.text,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          title="تمام صفحه"
+                        >
+                          {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   {settingsOpen && (
@@ -1473,6 +1502,7 @@ export default function MoviePluss() {
                         {renderEnglish(activeCue.en, "overlay", -1)}
                       </div>
                     )}
+
                     {showPersian && activeCue.fa && (
                       <div
                         style={{
@@ -1548,12 +1578,11 @@ export default function MoviePluss() {
                             cursor: "pointer",
                             direction: "rtl",
                             fontFamily: "'Vazirmatn', sans-serif",
-                            position: "relative", // مهم برای پاپ‌آپ بالای کارت
+                            position: "relative",
                           }}
                         >
                           {isWordPopupHere && (
                             <div
-                              id="word-translation-popup"
                               className="word-popup"
                               onClick={(e) => e.stopPropagation()}
                             >
@@ -1677,7 +1706,6 @@ export default function MoviePluss() {
 
               <div className="bottom-quickbar">
                 <div className="bottom-quickbar-inner">
-                  {/* آیکن‌ها فقط برعکس شدند، کارکرد ثابت است */}
                   <button
                     className="quick-btn"
                     onClick={goToPreviousCard}
