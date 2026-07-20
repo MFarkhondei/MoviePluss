@@ -92,7 +92,9 @@ function parseSubtitleText(raw = "") {
 
       const times = lines[timeIndex].split("-->");
       const start = timeToSeconds(times[0]);
-      const end = timeToSeconds(times[1]?.trim().split(/\s+/)[0]);
+      const end = timeToSeconds(
+        times[1]?.trim().split(/\s+/)[0]
+      );
 
       const text = lines
         .slice(timeIndex + 1)
@@ -143,7 +145,10 @@ async function autoDecodeFile(file) {
   const invalidChars = utf8.match(/\uFFFD/g)?.length || 0;
 
   if (invalidChars > 3) {
-    return { text: decodeBuffer(buffer, "windows-1256"), encoding: "windows-1256" };
+    return {
+      text: decodeBuffer(buffer, "windows-1256"),
+      encoding: "windows-1256",
+    };
   }
 
   return { text: utf8, encoding: "utf-8" };
@@ -229,7 +234,14 @@ function SettingRange({ label, value, min, max, onChange }) {
   );
 }
 
-function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) {
+function SubtitleInput({
+  language,
+  file,
+  encoding,
+  color,
+  onFile,
+  onEncoding,
+}) {
   const label = language === "en" ? "زیرنویس انگلیسی" : "زیرنویس فارسی";
 
   return (
@@ -270,7 +282,10 @@ function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) 
           <option
             key={item.value}
             value={item.value}
-            style={{ background: COLORS.card, fontFamily: "'Vazirmatn', sans-serif" }}
+            style={{
+              background: COLORS.card,
+              fontFamily: "'Vazirmatn', sans-serif",
+            }}
           >
             {item.label}
           </option>
@@ -292,7 +307,10 @@ export default function MoviePluss() {
   const repeatRef = useRef(false);
 
   const translationDragRef = useRef(null);
+
+  // کش ترجمه‌های تک‌کلمه/کارت
   const translationCacheRef = useRef({});
+
   const hideControlsTimerRef = useRef(null);
 
   const [videoUrl, setVideoUrl] = useState("");
@@ -337,12 +355,15 @@ export default function MoviePluss() {
   const [subtitleBackground, setSubtitleBackground] = useState(true);
 
   const [wordPopup, setWordPopup] = useState(null);
-
   const [translationPosition, setTranslationPosition] = useState({
     top: 18,
     right: 18,
     left: null,
   });
+
+  const [cardTranslateLoading, setCardTranslateLoading] = useState({});
+  // cardTranslateLoading: { [cueIndex]: true }
+  // اگر خواستی میشه با id رشته‌ای هم کرد.
 
   const activeCue = currentCue >= 0 ? cues[currentCue] : null;
 
@@ -391,7 +412,9 @@ export default function MoviePluss() {
   }, [currentCue, cardsLayout]);
 
   useEffect(() => {
-    return () => { if (videoUrl) URL.revokeObjectURL(videoUrl); };
+    return () => {
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+    };
   }, [videoUrl]);
 
   const showControlsTemporarily = useCallback(() => {
@@ -587,7 +610,14 @@ export default function MoviePluss() {
     }
   };
 
-  // ترجمه
+  const handleVideoContextMenu = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const handleVideoClick = () => togglePlay();
+
+  // ترجمه روی تک‌کلمه (همان قبلی)
   const translateWord = async (rawWord) => {
     const word = rawWord.replace(/[^A-Za-z'-]/g, "").trim();
     if (!word) return;
@@ -595,7 +625,11 @@ export default function MoviePluss() {
     const key = word.toLowerCase();
 
     if (translationCacheRef.current[key]) {
-      setWordPopup({ word, translation: translationCacheRef.current[key], loading: false });
+      setWordPopup({
+        word,
+        translation: translationCacheRef.current[key],
+        loading: false,
+      });
       return;
     }
 
@@ -607,7 +641,9 @@ export default function MoviePluss() {
       );
       const data = await response.json();
 
-      const translation = data?.responseData?.translatedText || "ترجمه پیدا نشد";
+      const translation =
+        data?.responseData?.translatedText || "ترجمه پیدا نشد";
+
       translationCacheRef.current[key] = translation;
 
       setWordPopup({ word, translation, loading: false });
@@ -628,7 +664,10 @@ export default function MoviePluss() {
             translateWord(token);
           }}
           title="برای ترجمه کلیک کنید"
-          style={{ cursor: "pointer", borderBottom: `1px dotted ${COLORS.yellow}` }}
+          style={{
+            cursor: "pointer",
+            borderBottom: `1px dotted ${COLORS.yellow}`,
+          }}
         >
           {token}
         </span>
@@ -636,14 +675,7 @@ export default function MoviePluss() {
     });
   };
 
-  const handleVideoContextMenu = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
-  const handleVideoClick = () => togglePlay();
-
-  // پاپ‌آپ ترجمه
+  // پاپ‌آپ جابجایی ترجمه
   const handleTranslationPointerDown = (event) => {
     if (!translationRef.current || !playerRef.current) return;
 
@@ -651,6 +683,7 @@ export default function MoviePluss() {
     event.stopPropagation();
 
     const popupRect = translationRef.current.getBoundingClientRect();
+
     translationDragRef.current = {
       active: true,
       offsetX: event.clientX - popupRect.left,
@@ -665,8 +698,11 @@ export default function MoviePluss() {
     const playerRect = playerRef.current.getBoundingClientRect();
     const popupRect = translationRef.current.getBoundingClientRect();
 
-    let left = event.clientX - playerRect.left - translationDragRef.current.offsetX;
-    let top = event.clientY - playerRect.top - translationDragRef.current.offsetY;
+    let left =
+      event.clientX - playerRect.left - translationDragRef.current.offsetX;
+
+    let top =
+      event.clientY - playerRect.top - translationDragRef.current.offsetY;
 
     left = Math.max(8, Math.min(left, playerRect.width - popupRect.width - 8));
     top = Math.max(8, Math.min(top, playerRect.height - popupRect.height - 8));
@@ -681,6 +717,7 @@ export default function MoviePluss() {
   useEffect(() => {
     window.addEventListener("pointermove", handleTranslationPointerMove);
     window.addEventListener("pointerup", handleTranslationPointerUp);
+
     return () => {
       window.removeEventListener("pointermove", handleTranslationPointerMove);
       window.removeEventListener("pointerup", handleTranslationPointerUp);
@@ -738,6 +775,7 @@ export default function MoviePluss() {
 
     if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       touchRef.current.swiped = true;
+
       if (dx > 0) goToNextCard();
       else goToPreviousCard();
     }
@@ -784,6 +822,89 @@ export default function MoviePluss() {
     window.addEventListener("keydown", handleKeyboard);
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
+
+  // ✅ ترجمه کل متن کارت (cue.en) -> fa
+  const translateCardToPersian = async (cueIndex) => {
+    const cue = cuesRef.current[cueIndex];
+    if (!cue) return;
+
+    // اگر از قبل ترجمه شده باشد، دوباره نمی‌گیریم
+    if (cue.fa && cue.fa.trim()) return;
+
+    if (cardTranslateLoading[cueIndex]) return;
+
+    setCardTranslateLoading((prev) => ({ ...prev, [cueIndex]: true }));
+
+    const enText = (cue.en || "").trim();
+    const key = `card:${enText}`;
+
+    try {
+      // کش
+      if (translationCacheRef.current[key]) {
+        const cachedFa = translationCacheRef.current[key];
+
+        setCues((prev) => {
+          const next = [...prev];
+          next[cueIndex] = { ...next[cueIndex], fa: cachedFa };
+          return next;
+        });
+
+        cuesRef.current = cuesRef.current.map((c, i) =>
+          i === cueIndex ? { ...c, fa: cachedFa } : c
+        );
+
+        setCardTranslateLoading((prev) => {
+          const n = { ...prev };
+          delete n[cueIndex];
+          return n;
+        });
+
+        return;
+      }
+
+      const response = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(enText)}&langpair=en|fa`
+      );
+      const data = await response.json();
+
+      const faText =
+        data?.responseData?.translatedText || "ترجمه پیدا نشد";
+
+      translationCacheRef.current[key] = faText;
+
+      setCues((prev) => {
+        const next = [...prev];
+        next[cueIndex] = { ...next[cueIndex], fa: faText };
+        return next;
+      });
+
+      cuesRef.current = cuesRef.current.map((c, i) =>
+        i === cueIndex ? { ...c, fa: faText } : c
+      );
+
+      // اگر کاربر fa را خاموش کرده باشد، باز هم می‌شود نشان داد فقط در overlay.
+      // برای نمایش کارت، ما زیرنویس fa را شرطی نشان می‌دهیم، بنابراین بهتر است showPersian را هم روشن کنیم.
+      setShowPersian(true);
+    } catch {
+      // خطا را در fa کارت بنویسیم
+      const faText = "خطا در دریافت ترجمه";
+      setCues((prev) => {
+        const next = [...prev];
+        next[cueIndex] = { ...next[cueIndex], fa: faText };
+        return next;
+      });
+      cuesRef.current = cuesRef.current.map((c, i) =>
+        i === cueIndex ? { ...c, fa: faText } : c
+      );
+      setShowPersian(true);
+    } finally {
+      setCardTranslateLoading((prev) => {
+        const n = { ...prev };
+        delete n[cueIndex];
+        return n;
+      });
+    }
+  };
 
   return (
     <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
@@ -1012,6 +1133,24 @@ export default function MoviePluss() {
         }
         .upload-section .apply-btn:active { transform: scale(0.98); }
 
+        .card-translate-btn {
+          margin-top: 10px;
+          width: 100%;
+          border: 1px solid ${COLORS.border};
+          background: rgba(0,0,0,.25);
+          color: ${COLORS.text};
+          padding: 7px 10px;
+          border-radius: 10px;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .card-translate-btn:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+
         @media (max-width: 767px) {
           .movie-player { min-height: 460px; }
           .upload-section { grid-template-columns: 1fr !important; }
@@ -1131,7 +1270,9 @@ export default function MoviePluss() {
                   onTouchStart={handleTouchStart}
                   onTouchMove={handleTouchMove}
                   onTouchEnd={handleTouchEnd}
-                  style={{ filter: `brightness(${brightness}%) contrast(${contrast}%)` }}
+                  style={{
+                    filter: `brightness(${brightness}%) contrast(${contrast}%)`,
+                  }}
                 />
 
                 {wordPopup && (
@@ -1342,7 +1483,6 @@ export default function MoviePluss() {
                     </button>
                   </div>
 
-                  {/* ✅ تنظیمات با بستن X + موارد جدید */}
                   {settingsOpen && (
                     <div
                       className="settings-popup"
@@ -1436,7 +1576,6 @@ export default function MoviePluss() {
                         />
                       </label>
 
-                      {/* ✅ گزینه تکرار در تنظیمات */}
                       <label
                         style={{
                           display: "flex",
@@ -1489,65 +1628,92 @@ export default function MoviePluss() {
                   </div>
 
                   <div className="cards-container">
-                    {cues.map((cue, index) => (
-                      <div
-                        key={index}
-                        data-card={index}
-                        className="subtitle-card"
-                        onClick={() => jumpToCue(index, true)}
-                        style={{
-                          border: `1px solid ${
-                            currentCue === index ? COLORS.yellow : COLORS.border
-                          }`,
-                          borderRadius: 10,
-                          background: currentCue === index ? COLORS.active : COLORS.card,
-                          cursor: "pointer",
-                          direction: "rtl",
-                          fontFamily: "'Vazirmatn', sans-serif",
-                        }}
-                      >
+                    {cues.map((cue, index) => {
+                      const translating = !!cardTranslateLoading[index];
+                      const faEmpty = !cue.fa || !cue.fa.trim();
+
+                      const showTranslateBtn =
+                        faEmpty && !!cue.en && (!persianFile || !cue.fa);
+
+                      return (
                         <div
+                          key={index}
+                          data-card={index}
+                          className="subtitle-card"
+                          onClick={() => jumpToCue(index, true)}
                           style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            marginBottom: 8,
-                            color: COLORS.muted,
-                            fontSize: 10,
+                            border: `1px solid ${
+                              currentCue === index ? COLORS.yellow : COLORS.border
+                            }`,
+                            borderRadius: 10,
+                            background:
+                              currentCue === index ? COLORS.active : COLORS.card,
+                            cursor: "pointer",
+                            direction: "rtl",
+                            fontFamily: "'Vazirmatn', sans-serif",
                           }}
                         >
-                          <span>کارت {index + 1}</span>
-                          <span>{formatTime(cue.start)}</span>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginBottom: 8,
+                              color: COLORS.muted,
+                              fontSize: 10,
+                            }}
+                          >
+                            <span>کارت {index + 1}</span>
+                            <span>{formatTime(cue.start)}</span>
+                          </div>
+
+                          {cue.en && (
+                            <div
+                              style={{
+                                color: COLORS.yellow,
+                                fontSize: 12,
+                                lineHeight: 1.6,
+                                direction: "ltr",
+                                textAlign: "left",
+                              }}
+                            >
+                              {renderEnglish(cue.en, `card-${index}`)}
+                            </div>
+                          )}
+
+                          {/* دکمه ترجمه کارت به فارسی */}
+                          {showTranslateBtn && (
+                            <button
+                              type="button"
+                              className="card-translate-btn"
+                              disabled={translating}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                translateCardToPersian(index);
+                              }}
+                              title="ترجمه کل متن این کارت به فارسی"
+                            >
+                              {translating ? "در حال ترجمه..." : "ترجمه به فارسی"}
+                            </button>
+                          )}
+
+                          {/* متن فارسی کارت */}
+                          {cue.fa && (
+                            <div
+                              style={{
+                                marginTop: 10,
+                                color: COLORS.teal,
+                                fontSize: 12,
+                                lineHeight: 1.7,
+                                textAlign: "right",
+                                whiteSpace: "pre-wrap",
+                              }}
+                            >
+                              {cue.fa}
+                            </div>
+                          )}
                         </div>
-
-                        {cue.en && (
-                          <div
-                            style={{
-                              color: COLORS.yellow,
-                              fontSize: 12,
-                              lineHeight: 1.6,
-                              direction: "ltr",
-                              textAlign: "left",
-                            }}
-                          >
-                            {renderEnglish(cue.en, `card-${index}`)}
-                          </div>
-                        )}
-
-                        {cue.fa && (
-                          <div
-                            style={{
-                              marginTop: 5,
-                              color: COLORS.teal,
-                              fontSize: 12,
-                              lineHeight: 1.7,
-                              textAlign: "right",
-                            }}
-                          >
-                            {cue.fa}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
               ) : (
@@ -1558,10 +1724,10 @@ export default function MoviePluss() {
                 </section>
               )}
 
-              {/* ✅ نوار پایین: فقط شکل فلش‌ها برعکس شد، کارکرد تغییر نکرد */}
+              {/* ✅ نوار پایین */}
               <div className="bottom-quickbar">
                 <div className="bottom-quickbar-inner">
-                  {/* این دکمه کارکردش Next است، ولی شکل فلش برعکس (ChevronRight) */}
+                  {/* کارکرد Next/Prev ثابت است، فقط شکل */}
                   <button
                     className="quick-btn"
                     onClick={goToNextCard}
@@ -1580,7 +1746,6 @@ export default function MoviePluss() {
                     {isPlaying ? <Pause size={22} /> : <Play size={22} />}
                   </button>
 
-                  {/* این دکمه کارکردش Previous است، ولی شکل فلش برعکس (ChevronLeft) */}
                   <button
                     className="quick-btn"
                     onClick={goToPreviousCard}
