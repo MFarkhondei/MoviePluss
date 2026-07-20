@@ -278,6 +278,8 @@ export default function MoviePluss() {
 
   // کش ترجمه کل متن کارت
   const translationCacheRef = useRef({});
+  // کش ترجمه تک کلمه
+  const translationWordCacheRef = useRef({});
 
   const hideControlsTimerRef = useRef(null);
 
@@ -332,6 +334,125 @@ export default function MoviePluss() {
   const [cardTranslateLoading, setCardTranslateLoading] = useState({});
 
   const activeCue = currentCue >= 0 ? cues[currentCue] : null;
+
+  // --- translation popup helpers ---
+  const wordPopupTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (wordPopupTimerRef.current) clearTimeout(wordPopupTimerRef.current);
+    };
+  }, []);
+
+  const fetchWordTranslation = useCallback(async (word) => {
+    const clean = (word || "").trim();
+    if (!clean) return "";
+
+    const key = `word:${clean.toLowerCase()}`;
+    if (translationWordCacheRef.current[key]) return translationWordCacheRef.current[key];
+
+    const response = await fetch(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+        clean
+      )}&langpair=en|fa`
+    );
+    const data = await response.json();
+    const faText = data?.responseData?.translatedText || "ترجمه پیدا نشد";
+    translationWordCacheRef.current[key] = faText;
+    return faText;
+  }, []);
+
+  const showWordPopupAt = useCallback((faText, rect) => {
+    // rect در مختصات viewport است
+    const padding = 10;
+    const width = Math.min(320, window.innerWidth - 24);
+
+    // برای پاپ‌آپ از right/top استفاده می‌کنیم (چون dir کلی RTL است)
+    const popupTop = Math.min(
+      window.innerHeight - 110,
+      Math.max(10, rect.top - 10)
+    );
+
+    const popupRight = Math.min(
+      window.innerWidth - 10,
+      Math.max(10, window.innerWidth - rect.right + padding)
+    );
+
+    setTranslationPosition({
+      top: popupTop,
+      right: popupRight,
+      left: null,
+    });
+
+    setWordPopup({
+      word: rect.word,
+      text: faText,
+      loading: false,
+      width,
+    });
+  }, []);
+
+  const translateWordPopup = useCallback(
+    async (word, el) => {
+      if (!word || !el) return;
+
+      const key = (word || "").trim();
+      if (!key) return;
+
+      const r = el.getBoundingClientRect();
+      // علامت مشخص برای اینکه در showWordPopupAt کلمه هم داشته باشیم
+      r.word = key;
+
+      // اگر قبلاً تایمر داشتیم، پاکش می‌کنیم
+      if (wordPopupTimerRef.current) clearTimeout(wordPopupTimerRef.current);
+
+      // حالت loading
+      const loadingText = "ترجمه...";
+      setTranslationPosition((prev) => prev);
+      setWordPopup({
+        word: key,
+        text: loadingText,
+        loading: true,
+        width: Math.min(320, window.innerWidth - 24),
+      });
+
+      // اگر کش داشتیم، سریع نمایش بده
+      const cacheKey = `word:${key.toLowerCase()}`;
+      if (translationWordCacheRef.current[cacheKey]) {
+        showWordPopupAt(translationWordCacheRef.current[cacheKey], r);
+        return;
+      }
+
+      try {
+        const fa = await fetchWordTranslation(key);
+        showWordPopupAt(fa, r);
+      } catch {
+        showWordPopupAt("خطا در دریافت ترجمه", r);
+      } finally {
+        // اختیاری: بعد از چند ثانیه پاپ‌آپ بسته شود (درخواست شما نگفته)
+        // پس فعلاً auto-close نداریم.
+      }
+    },
+    [fetchWordTranslation, showWordPopupAt]
+  );
+
+  // close popup on scroll / click outside
+  useEffect(() => {
+    const onDocClick = (e) => {
+      const target = e.target;
+      if (!target) return;
+      // اگر روی خود پاپ‌آپ یا کلمه کلیک شد، نبند
+      const popupEl = document.getElementById("word-translation-popup");
+      if (popupEl && popupEl.contains(target)) return;
+
+      const wordEl = target.closest?.("[data-word-token='1']");
+      if (wordEl) return;
+
+      setWordPopup(null);
+    };
+    document.addEventListener("click", onDocClick, true);
+    return () => document.removeEventListener("click", onDocClick, true);
+  }, []);
 
   useEffect(() => {
     cuesRef.current = cues;
@@ -481,7 +602,7 @@ export default function MoviePluss() {
 
       currentCueRef.current = index;
       setCurrentCue(index);
-      setWordPopup(null);
+      setWordPopup(null); // popup را برای جمله جدید پاک می‌کنیم
 
       videoRef.current.currentTime = cue.start;
       if (autoplay) playVideo();
@@ -685,9 +806,38 @@ export default function MoviePluss() {
     }
   };
 
+  // renderEnglish: کلمات قابل کلیک (تک‌کلمه popup)
   const renderEnglish = (text, prefix) => {
+    // tokenization: هم فاصله‌ها حفظ شوند، هم کلمات واقعی قابل کلیک باشند
     return text.split(/(\s+)/).map((token, index) => {
       if (/^\s+$/.test(token)) return token;
+
+      const isWord = /^[A-Za-z]+(?:'[A-Za-z]+)?$/.test(token) || /^[A-Za-z]+$/.test(token);
+      const clickable = isWord && token.length > 1;
+
+      // برای کلمه‌های قابل کلیک
+      if (clickable) {
+        return (
+          <span
+            key={`${prefix}-${index}`}
+            data-word-token="1"
+            style={{
+              borderBottom: `1px dotted ${COLORS.yellow}`,
+              cursor: "pointer",
+              color: COLORS.yellow,
+              fontWeight: 700,
+            }}
+            onClick={(e) => {
+              e.stopPropagation(); // تا کلیک کارت فعال نشود
+              translateWordPopup(token, e.currentTarget);
+            }}
+          >
+            {token}
+          </span>
+        );
+      }
+
+      // برای علائم نگارشی/کلمات کوتاه: فقط نمایش
       return (
         <span
           key={`${prefix}-${index}`}
@@ -702,6 +852,7 @@ export default function MoviePluss() {
     });
   };
 
+  // کیبورد
   useEffect(() => {
     const handleKeyboard = (event) => {
       const tag = document.activeElement?.tagName;
@@ -952,7 +1103,53 @@ export default function MoviePluss() {
         }
 
         .player-controls.hidden { opacity: 0; pointer-events: none; }
+
+        /* --- word popup style --- */
+        #word-translation-popup {
+          position: fixed; /* بهتر برای اینکه کنار کلمه درست نمایش داده شود */
+          z-index: 2000;
+          background: rgba(20,23,31,.97);
+          border: 1px solid ${COLORS.border};
+          border-radius: 10px;
+          padding: 10px 12px;
+          box-shadow: 0 10px 30px rgba(0,0,0,.45);
+          user-select: none;
+          max-width: 340px;
+          transform: translateY(-2px);
+        }
       `}</style>
+
+      {wordPopup && (
+        <div
+          id="word-translation-popup"
+          style={{
+            top: translationPosition.top,
+            right: translationPosition.right,
+            width: wordPopup.width,
+            direction: "rtl",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <span
+              style={{
+                color: COLORS.yellow,
+                fontWeight: 900,
+                fontSize: 13,
+              }}
+            >
+              {wordPopup.word}
+            </span>
+            <div style={{ flex: 1 }} />
+            {wordPopup.loading ? (
+              <span style={{ color: COLORS.muted, fontSize: 12 }}>...</span>
+            ) : null}
+          </div>
+          <div style={{ color: COLORS.teal, fontSize: 14, fontWeight: 800, lineHeight: 1.6 }}>
+            {wordPopup.text}
+          </div>
+        </div>
+      )}
 
       <header
         style={{
@@ -1488,8 +1685,7 @@ export default function MoviePluss() {
 
               <div className="bottom-quickbar">
                 <div className="bottom-quickbar-inner">
-                  {/* جابجایی دکمه‌ها: کارت قبلی/بعدی فقط جای‌شان عوض شد */}
-                  {/* سمت راست = کارت قبلی */}
+                  {/* سمت راست = کارت قبلی (فقط آیکن جابجا شده، کارکرد ثابت است) */}
                   <button
                     className="quick-btn"
                     onClick={goToPreviousCard}
