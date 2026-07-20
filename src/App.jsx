@@ -49,7 +49,9 @@ function formatTime(value = 0) {
   const seconds = Math.floor(value % 60);
 
   if (hours > 0) {
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(
+      seconds
+    ).padStart(2, "0")}`;
   }
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
@@ -252,7 +254,8 @@ function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) 
   );
 }
 
-const STORAGE_LAST = "moviepluss:lastSession:v1";
+const STORAGE_LAST_TIME_PREFIX = "moviepluss:lastTime:";
+const STORAGE_SETTINGS = "moviepluss:lastSettings:v2";
 
 export default function App() {
   const videoRef = useRef(null);
@@ -262,30 +265,13 @@ export default function App() {
 
   const cuesRef = useRef([]);
   const currentCueRef = useRef(-1);
-  const repeatRef = useRef(false);
+  const repeatRef = useRef(true); // default true
 
   const translationCacheRef = useRef({});
   const translationWordCacheRef = useRef({});
   const hideControlsTimerRef = useRef(null);
 
   const suppressOutsideClickRef = useRef(false);
-
-  // last time key (by filename)
-  const savedTimeKeyRef = useRef(null);
-
-  // gesture controls (single definition only)
-  const gestureRef = useRef({
-    pointerId: null,
-    startY: 0,
-    startVolume: 1,
-  });
-
-  const dragStateRef = useRef({
-    dragging: false,
-    startClientY: 0,
-    startCardsRatio: 0,
-    totalHeight: 1,
-  });
 
   // Split default: cards 40%, video 60%
   const [cardsRatio, setCardsRatio] = useState(0.4);
@@ -296,7 +282,7 @@ export default function App() {
   const [videoName, setVideoName] = useState("");
 
   const [englishFile, setEnglishFile] = useState(null);
-  const [persianFile, setPersianFile] = useState("");
+  const [persianFile, setPersianFile] = useState(null);
 
   const [englishText, setEnglishText] = useState("");
   const [persianText, setPersianText] = useState("");
@@ -315,8 +301,7 @@ export default function App() {
 
   const [playbackRate, setPlaybackRate] = useState(1);
 
-  const [repeatOn, setRepeatOn] = useState(false);
-
+  const [repeatOn, setRepeatOn] = useState(true); // default active
   const [showEnglish, setShowEnglish] = useState(false);
   const [showPersian, setShowPersian] = useState(false);
 
@@ -338,23 +323,26 @@ export default function App() {
 
   const activeCue = currentCue >= 0 ? cuesRef.current[currentCue] : null;
 
-  // restore last session (subtitles text)
+  // ---- load only settings (not subtitles), and restore UI preferences
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_LAST);
+      const raw = localStorage.getItem(STORAGE_SETTINGS);
       if (!raw) return;
-      const data = JSON.parse(raw);
+      const s = JSON.parse(raw);
 
-      if (typeof data?.englishText === "string") setEnglishText(data.englishText);
-      if (typeof data?.persianText === "string") setPersianText(data.persianText);
-      if (typeof data?.englishEncoding === "string") setEnglishEncoding(data.englishEncoding);
-      if (typeof data?.persianEncoding === "string") setPersianEncoding(data.persianEncoding);
+      if (typeof s?.cardsRatio === "number") setCardsRatio(Math.max(minCardsRatio, Math.min(maxCardsRatio, s.cardsRatio)));
+      if (typeof s?.playbackRate === "number") setPlaybackRate(s.playbackRate);
+      if (typeof s?.repeatOn === "boolean") setRepeatOn(s.repeatOn);
+      if (typeof s?.showEnglish === "boolean") setShowEnglish(s.showEnglish);
+      if (typeof s?.showPersian === "boolean") setShowPersian(s.showPersian);
+      if (typeof s?.cardsLayout === "string") setCardsLayout(s.cardsLayout);
+      if (typeof s?.brightness === "number") setBrightness(s.brightness);
 
-      if (typeof data?.englishText === "string" && typeof data?.persianText === "string") {
-        const merged = mergeSubtitles(data.englishText, data.persianText);
-        setCues(merged);
-        cuesRef.current = merged;
-      }
+      if (typeof s?.subtitleSize === "number") setSubtitleSize(s.subtitleSize);
+      if (typeof s?.subtitleBottom === "number") setSubtitleBottom(s.subtitleBottom);
+      if (typeof s?.subtitleBackground === "boolean") setSubtitleBackground(s.subtitleBackground);
+
+      if (typeof s?.volume === "number") setVolume(Math.max(0, Math.min(1, s.volume)));
     } catch {}
   }, []);
 
@@ -387,12 +375,15 @@ export default function App() {
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
 
-  // save currentTime
+  // save currentTime (only per-video)
   const saveCurrentTime = useCallback(() => {
-    if (!savedTimeKeyRef.current) return;
+    if (!videoName) return;
+    const key = `${STORAGE_LAST_TIME_PREFIX}${videoName}`;
     if (!videoRef.current) return;
-    localStorage.setItem(savedTimeKeyRef.current, String(videoRef.current.currentTime || 0));
-  }, []);
+    try {
+      localStorage.setItem(key, String(videoRef.current.currentTime || 0));
+    } catch {}
+  }, [videoName]);
 
   useEffect(() => {
     const beforeUnload = () => saveCurrentTime();
@@ -400,27 +391,47 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, [saveCurrentTime]);
 
-  const persistSession = useCallback(
-    (videoNameOverride) => {
-      try {
-        localStorage.setItem(
-          STORAGE_LAST,
-          JSON.stringify({
-            lastVideoName: videoNameOverride ?? videoName,
-            englishText,
-            persianText,
-            englishEncoding,
-            persianEncoding,
-          })
-        );
-      } catch {}
-    },
-    [videoName, englishText, persianText, englishEncoding, persianEncoding]
-  );
+  // persist settings (UI preferences)
+  const persistSettings = useCallback(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_SETTINGS,
+        JSON.stringify({
+          cardsRatio,
+          playbackRate,
+          repeatOn,
+          showEnglish,
+          showPersian,
+          cardsLayout,
+          brightness,
+          subtitleSize,
+          subtitleBottom,
+          subtitleBackground,
+          volume,
+        })
+      );
+    } catch {}
+  }, [
+    cardsRatio,
+    playbackRate,
+    repeatOn,
+    showEnglish,
+    showPersian,
+    cardsLayout,
+    brightness,
+    subtitleSize,
+    subtitleBottom,
+    subtitleBackground,
+    volume,
+  ]);
+
+  useEffect(() => {
+    persistSettings();
+  }, [persistSettings]);
 
   // auto scroll card to active
   useEffect(() => {
-    if (dragStateRef.current.dragging) return;
+    if (splitContainerRef.current && dragStateRef.current.dragging) return; // safe guard
     if (currentCue < 0 || !cardsRef.current) return;
 
     const containerEl = cardsRef.current;
@@ -463,7 +474,8 @@ export default function App() {
   }, [showControlsTemporarily]);
 
   const pauseVideo = useCallback(() => {
-    videoRef.current?.pause();
+    if (!videoRef.current) return;
+    videoRef.current.pause();
     setIsPlaying(false);
     setControlsVisible(true);
     saveCurrentTime();
@@ -554,10 +566,12 @@ export default function App() {
     videoRef.current.volume = volume;
     videoRef.current.playbackRate = playbackRate;
 
-    if (savedTimeKeyRef.current) {
-      const saved = localStorage.getItem(savedTimeKeyRef.current);
+    // restore last time ONLY for this video file name
+    if (videoName) {
+      const key = `${STORAGE_LAST_TIME_PREFIX}${videoName}`;
+      const saved = localStorage.getItem(key);
       const t = saved ? Number(saved) : 0;
-      if (Number.isFinite(t) && t > 0) {
+      if (Number.isFinite(t) && t >= 0) {
         const safeT = Math.min(t, videoRef.current.duration || t);
         videoRef.current.currentTime = safeT;
         setCurrentTime(safeT);
@@ -573,23 +587,30 @@ export default function App() {
     setVideoUrl(url);
     setVideoName(file.name);
 
-    savedTimeKeyRef.current = `moviepluss:lastTime:${file.name}`;
-    persistSession(file.name);
-
+    // reset player state
     setCurrentTime(0);
     setDuration(0);
     setCurrentCue(-1);
-    setIsPlaying(false);
-    setWordPopup(null);
     currentCueRef.current = -1;
 
-    // if subtitles already loaded via session, build cues
+    setIsPlaying(false);
+    setWordPopup(null);
+
+    // If subtitles already selected, apply immediately
     if (englishText && persianText) {
       const merged = mergeSubtitles(englishText, persianText);
       setCues(merged);
       cuesRef.current = merged;
     }
   };
+
+  const applySubtitlesNow = useCallback(() => {
+    const merged = mergeSubtitles(englishText, persianText);
+    setCues(merged);
+    cuesRef.current = merged;
+    setCurrentCue(-1);
+    currentCueRef.current = -1;
+  }, [englishText, persianText]);
 
   const handleSubtitleFile = async (file, language) => {
     if (!file) return;
@@ -606,6 +627,13 @@ export default function App() {
     }
   };
 
+  // when either subtitle text changes, auto-apply if both are ready
+  useEffect(() => {
+    if (englishText && persianText) {
+      applySubtitlesNow();
+    }
+  }, [englishText, persianText, applySubtitlesNow]);
+
   const changeSubtitleEncoding = async (language, encoding) => {
     if (language === "en") {
       setEnglishEncoding(encoding);
@@ -614,15 +642,7 @@ export default function App() {
       setPersianEncoding(encoding);
       if (persianFile) setPersianText(await decodeFile(persianFile, encoding));
     }
-  };
-
-  const applySubtitles = () => {
-    const merged = mergeSubtitles(englishText, persianText);
-    setCues(merged);
-    cuesRef.current = merged;
-    setCurrentCue(-1);
-    currentCueRef.current = -1;
-    persistSession();
+    // applySubtitleNow is triggered by englishText/persianText effect above
   };
 
   const toggleFullscreen = async () => {
@@ -634,16 +654,21 @@ export default function App() {
     }
   };
 
-  // ================== Gesture handlers (ONLY ONCE)
+  // ================== Gesture handlers (ONLY ONCE) - remove volume gesture
+  // We keep pointer gesture only to double speed while holding (optional). But per request:
+  // "نیاز نیست صدا با حرکت بالا و پایین انگشت زیاد و کم شود." => remove vertical volume logic.
+  const gestureRef = useRef({
+    pointerId: null,
+    startY: 0,
+  });
+
   const onVideoPointerDown = useCallback(
     (e) => {
       if (!videoRef.current) return;
-
       gestureRef.current.pointerId = e.pointerId;
       gestureRef.current.startY = e.clientY;
-      gestureRef.current.startVolume = videoRef.current.volume ?? volume;
 
-      // hold finger => double speed
+      // hold finger => double speed (keep this behavior)
       videoRef.current.playbackRate = playbackRate * 2;
 
       setControlsVisible(false);
@@ -652,21 +677,12 @@ export default function App() {
         videoRef.current.setPointerCapture(e.pointerId);
       } catch {}
     },
-    [playbackRate, volume]
+    [playbackRate]
   );
 
   const onVideoPointerMove = useCallback((e) => {
-    if (!videoRef.current) return;
-    if (gestureRef.current.pointerId !== e.pointerId) return;
-
-    const dy = e.clientY - gestureRef.current.startY;
-    const step = 0.0025;
-
-    let nextVol = gestureRef.current.startVolume - dy * step;
-    nextVol = Math.max(0, Math.min(1, nextVol));
-
-    videoRef.current.volume = nextVol;
-    setVolume(nextVol);
+    // no-op for volume now (intentionally left empty)
+    void e;
   }, []);
 
   const endGesture = useCallback(
@@ -674,6 +690,7 @@ export default function App() {
       if (!videoRef.current) return;
       if (gestureRef.current.pointerId !== e.pointerId) return;
 
+      // restore rate
       videoRef.current.playbackRate = playbackRate;
       gestureRef.current.pointerId = null;
 
@@ -684,6 +701,13 @@ export default function App() {
   );
 
   // ================== Split handle drag
+  const dragStateRef = useRef({
+    dragging: false,
+    startClientY: 0,
+    startCardsRatio: 0,
+    totalHeight: 1,
+  });
+
   const onStartDrag = useCallback(
     (e) => {
       const el = splitContainerRef.current;
@@ -815,9 +839,7 @@ export default function App() {
           next[cueIndex] = { ...next[cueIndex], fa: cachedFa };
           return next;
         });
-        cuesRef.current = cuesRef.current.map((c, i) =>
-          i === cueIndex ? { ...c, fa: cachedFa } : c
-        );
+        cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: cachedFa } : c));
         return;
       }
 
@@ -833,9 +855,7 @@ export default function App() {
         next[cueIndex] = { ...next[cueIndex], fa: faText };
         return next;
       });
-      cuesRef.current = cuesRef.current.map((c, i) =>
-        i === cueIndex ? { ...c, fa: faText } : c
-      );
+      cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: faText } : c));
     } catch {
       const faText = "خطا در دریافت ترجمه";
       setCues((prev) => {
@@ -843,9 +863,7 @@ export default function App() {
         next[cueIndex] = { ...next[cueIndex], fa: faText };
         return next;
       });
-      cuesRef.current = cuesRef.current.map((c, i) =>
-        i === cueIndex ? { ...c, fa: faText } : c
-      );
+      cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: faText } : c));
     } finally {
       setCardTranslateLoading((prev) => {
         const n = { ...prev };
@@ -1172,18 +1190,19 @@ export default function App() {
               align-items: stretch;
             }
             .upload-section > * { min-height: 42px; }
-            .upload-section .apply-btn {
+            .upload-section .hint {
               align-self: stretch;
-              min-height: 100%;
-              border: none;
               border-radius: 8px;
-              background: ${COLORS.yellow};
-              color: #171717;
-              font-weight: 800;
-              cursor: pointer;
-              font-family: 'Vazirmatn', sans-serif;
-              font-size: 14px;
-              padding: 0 20px;
+              padding: 10px 12px;
+              border: 1px solid rgba(255,255,255,0.08);
+              color: ${COLORS.muted};
+              fontSize: 12px;
+              background: rgba(0,0,0,.10);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              text-align: center;
+              line-height: 1.5;
             }
             @media (max-width: 767px) { .upload-section { grid-template-columns: 1fr !important; } }
           `}</style>
@@ -1217,9 +1236,9 @@ export default function App() {
             onEncoding={async (lang, enc) => changeSubtitleEncoding(lang, enc)}
           />
 
-          <button onClick={applySubtitles} className="apply-btn">
-            اعمال زیرنویس‌ها
-          </button>
+          <div className="hint">
+            به محض انتخاب زیرنویس‌ها، کارت‌ها اعمال می‌شوند
+          </div>
         </section>
       )}
 
@@ -1277,7 +1296,7 @@ export default function App() {
                       saveCurrentTime();
                     }}
                     onDoubleClick={toggleFullscreen}
-                    onClick={togglePlay}
+                    onClick={togglePlay} // start/stop with click
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -1682,7 +1701,10 @@ export default function App() {
                             }}
                           >
                             {isWordPopupHere && (
-                              <div className="word-popup" onClick={(e) => e.stopPropagation()}>
+                              <div
+                                className="word-popup"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <div className="word-popup-header">
                                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                     <span style={{ color: COLORS.yellow, fontWeight: 900, fontSize: 13 }}>
@@ -1705,13 +1727,29 @@ export default function App() {
                               </div>
                             )}
 
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, color: COLORS.muted, fontSize: 10 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                marginBottom: 8,
+                                color: COLORS.muted,
+                                fontSize: 10,
+                              }}
+                            >
                               <span>کارت {index + 1}</span>
                               <span>{formatTime(cue.start)}</span>
                             </div>
 
                             {cue.en && (
-                              <div style={{ color: COLORS.yellow, fontSize: 12, lineHeight: 1.6, direction: "ltr", textAlign: "left" }}>
+                              <div
+                                style={{
+                                  color: COLORS.yellow,
+                                  fontSize: 12,
+                                  lineHeight: 1.6,
+                                  direction: "ltr",
+                                  textAlign: "left",
+                                }}
+                              >
                                 {renderEnglish(cue.en, `card-${index}`, index)}
                               </div>
                             )}
@@ -1743,7 +1781,16 @@ export default function App() {
                             )}
 
                             {cue.fa && cue.fa.trim() && (
-                              <div style={{ marginTop: 10, color: COLORS.teal, fontSize: 12, lineHeight: 1.7, textAlign: "right", whiteSpace: "pre-wrap" }}>
+                              <div
+                                style={{
+                                  marginTop: 10,
+                                  color: COLORS.teal,
+                                  fontSize: 12,
+                                  lineHeight: 1.7,
+                                  textAlign: "right",
+                                  whiteSpace: "pre-wrap",
+                                }}
+                              >
                                 {cue.fa}
                               </div>
                             )}
@@ -1752,7 +1799,7 @@ export default function App() {
                       })
                     ) : (
                       <div style={{ padding: 18, color: COLORS.muted, fontSize: 13 }}>
-                        با اعمال زیرنویس‌ها، کارت‌ها نمایش داده می‌شوند.
+                        با انتخاب زیرنویس‌ها، کارت‌ها نمایش داده می‌شوند.
                       </div>
                     )}
                   </div>
