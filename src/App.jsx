@@ -317,12 +317,14 @@ export default function App() {
   const [subtitleBottom, setSubtitleBottom] = useState(70);
   const [subtitleBackground, setSubtitleBackground] = useState(true);
 
+  // NEW: card font size setting
+  const [cardFontSize, setCardFontSize] = useState(12);
+
   const [wordPopup, setWordPopup] = useState(null);
   const [cardTranslateLoading, setCardTranslateLoading] = useState({});
 
   const activeCue = currentCue >= 0 ? cuesRef.current[currentCue] : null;
 
-  // NEW: holding finger status
   const holdingRef = useRef(false);
 
   useEffect(() => {
@@ -343,6 +345,8 @@ export default function App() {
       if (typeof s?.subtitleSize === "number") setSubtitleSize(s.subtitleSize);
       if (typeof s?.subtitleBottom === "number") setSubtitleBottom(s.subtitleBottom);
       if (typeof s?.subtitleBackground === "boolean") setSubtitleBackground(s.subtitleBackground);
+
+      if (typeof s?.cardFontSize === "number") setCardFontSize(s.cardFontSize);
 
       if (typeof s?.volume === "number") setVolume(Math.max(0, Math.min(1, s.volume)));
     } catch {}
@@ -405,6 +409,7 @@ export default function App() {
           subtitleBottom,
           subtitleBackground,
           volume,
+          cardFontSize, // NEW
         })
       );
     } catch {}
@@ -420,6 +425,7 @@ export default function App() {
     subtitleBottom,
     subtitleBackground,
     volume,
+    cardFontSize,
   ]);
 
   useEffect(() => {
@@ -512,22 +518,19 @@ export default function App() {
 
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
-
     const time = videoRef.current.currentTime;
     setCurrentTime(time);
 
     const list = cuesRef.current;
     const index = currentCueRef.current;
 
-    // NEW: if holding finger -> ignore repeat and go to next cue instead
+    // NEW: holding finger -> ignore repeat and go to next cue
     if (holdingRef.current && index >= 0 && list[index]) {
       const current = list[index];
       const next = list[index + 1];
       const boundary = next ? next.start : current.end;
 
-      // when we reach the start of next cue (or end), jump forward
       if (next && time >= boundary - 0.04) {
-        // move to next card, do NOT repeat current
         currentCueRef.current = index + 1;
         setCurrentCue(index + 1);
         videoRef.current.currentTime = next.start;
@@ -535,7 +538,6 @@ export default function App() {
       }
     }
 
-    // Normal repeat logic (only when not holding)
     if (!holdingRef.current && repeatRef.current && index >= 0 && list[index]) {
       const current = list[index];
       const next = list[index + 1];
@@ -618,9 +620,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (englishText || persianText) {
-      applySubtitlesNow();
-    } else {
+    if (englishText || persianText) applySubtitlesNow();
+    else {
       setCues([]);
       cuesRef.current = [];
       setCurrentCue(-1);
@@ -647,13 +648,11 @@ export default function App() {
     }
   };
 
-  // NEW/CONFIRMED: holding finger => 2x speed; also forces next cue via holdingRef in handleTimeUpdate
   const gestureRef = useRef({ pointerId: null });
 
   const onVideoPointerDown = useCallback(
     (e) => {
       if (!videoRef.current) return;
-
       gestureRef.current.pointerId = e.pointerId;
       holdingRef.current = true;
 
@@ -668,7 +667,7 @@ export default function App() {
   );
 
   const onVideoPointerMove = useCallback((e) => {
-    void e; // no volume gesture
+    void e;
   }, []);
 
   const endGesture = useCallback(
@@ -739,7 +738,6 @@ export default function App() {
   useEffect(() => {
     const onDocClick = (e) => {
       if (suppressOutsideClickRef.current) return;
-
       const target = e.target;
       if (!target) return;
 
@@ -759,7 +757,6 @@ export default function App() {
   const fetchWordTranslation = useCallback(async (word) => {
     const clean = (word || "").trim();
     if (!clean) return "";
-
     const key = `word:${clean.toLowerCase()}`;
     if (translationWordCacheRef.current[key]) return translationWordCacheRef.current[key];
 
@@ -791,7 +788,6 @@ export default function App() {
           });
           return;
         }
-
         const fa = await fetchWordTranslation(clean);
         setWordPopup({ cardIndex, word: clean, text: fa, loading: false });
       } catch {
@@ -1482,6 +1478,15 @@ export default function App() {
                         </label>
 
                         <SettingRange
+                          label="اندازه فونت کارت‌ها"
+                          value={cardFontSize}
+                          min={10}
+                          max={22}
+                          onChange={setCardFontSize}
+                          step={1}
+                        />
+
+                        <SettingRange
                           label="اندازه زیرنویس"
                           value={subtitleSize}
                           min={60}
@@ -1729,7 +1734,7 @@ export default function App() {
                                 justifyContent: "space-between",
                                 marginBottom: 8,
                                 color: COLORS.muted,
-                                fontSize: 10,
+                                fontSize: Math.max(9, cardFontSize - 2),
                               }}
                             >
                               <span>کارت {index + 1}</span>
@@ -1740,7 +1745,7 @@ export default function App() {
                               <div
                                 style={{
                                   color: COLORS.yellow,
-                                  fontSize: 12,
+                                  fontSize: cardFontSize,
                                   lineHeight: 1.6,
                                   direction: "ltr",
                                   textAlign: "left",
@@ -1768,7 +1773,7 @@ export default function App() {
                                   borderRadius: 10,
                                   cursor: translating ? "not-allowed" : "pointer",
                                   fontFamily: "'Vazirmatn', sans-serif",
-                                  fontSize: 11,
+                                  fontSize: Math.max(10, cardFontSize - 1),
                                   fontWeight: 900,
                                 }}
                               >
@@ -1781,7 +1786,7 @@ export default function App() {
                                 style={{
                                   marginTop: 10,
                                   color: COLORS.teal,
-                                  fontSize: 12,
+                                  fontSize: cardFontSize,
                                   lineHeight: 1.7,
                                   textAlign: "right",
                                   whiteSpace: "pre-wrap",
