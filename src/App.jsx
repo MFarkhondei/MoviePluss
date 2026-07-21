@@ -1,3 +1,4 @@
+```jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
@@ -53,10 +54,7 @@ function formatTime(value = 0) {
   const mm = String(minutes).padStart(2, "0");
   const ss = String(seconds).padStart(2, "0");
 
-  if (hours > 0) {
-    return hh + ":" + mm + ":" + ss;
-  }
-
+  if (hours > 0) return hh + ":" + mm + ":" + ss;
   return mm + ":" + ss;
 }
 
@@ -1151,11 +1149,11 @@ export default function App() {
         }
 
         .card-side-nav.prev {
-          border-left: 1px solid rgba(255,255,255,0.05);
+          border-right: 1px solid rgba(255,255,255,0.05);
         }
 
         .card-side-nav.next {
-          border-right: 1px solid rgba(255,255,255,0.05);
+          border-left: 1px solid rgba(255,255,255,0.05);
         }
 
         .card-side-nav::before {
@@ -1243,52 +1241,6 @@ export default function App() {
           transform: translateY(-100%);
           direction: rtl;
           user-select: none;
-        }
-
-        .video-bottom-controls {
-          position: absolute;
-          left: 0;
-          right: 0;
-          bottom: 10px;
-          z-index: 95;
-          display: flex;
-          justify-content: center;
-          pointer-events: none;
-        }
-
-        .video-bottom-controls-inner {
-          pointer-events: auto;
-          direction: rtl;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          padding: 0;
-        }
-
-        .quick-btn {
-          direction: rtl;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 56px;
-          height: 52px;
-          border-radius: 16px;
-          border: 1px solid rgba(255,255,255,0.10);
-          background: rgba(0,0,0,.25);
-          color: ${COLORS.text};
-          cursor: pointer;
-          user-select: none;
-          padding: 0;
-        }
-
-        .quick-btn.play {
-          width: 56px;
-          height: 52px;
-          border-radius: 16px;
-          background: rgba(242,201,76,.16);
-          border-color: rgba(242,201,76,.35);
-          color: ${COLORS.yellow};
         }
 
         .word-popup-header {
@@ -1540,6 +1492,25 @@ export default function App() {
 
                         <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" }}>
                           <button
+                            onClick={togglePlay}
+                            style={{
+                              width: 38,
+                              height: 36,
+                              borderRadius: 10,
+                              border: "1px solid " + COLORS.border,
+                              background: "rgba(0,0,0,.25)",
+                              color: COLORS.text,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                            title={isPlaying ? "توقف" : "شروع"}
+                          >
+                            {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+                          </button>
+
+                          <button
                             onClick={() => setSettingsOpen((v) => !v)}
                             style={{
                               width: 38,
@@ -1758,19 +1729,6 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="video-bottom-controls">
-                    <div className="video-bottom-controls-inner">
-                      <button
-                        className="quick-btn play"
-                        onClick={togglePlay}
-                        title={isPlaying ? "توقف" : "شروع"}
-                        type="button"
-                      >
-                        {isPlaying ? <Pause size={24} /> : <Play size={24} />}
-                      </button>
-                    </div>
-                  </div>
-
                   {activeCue && (
                     <div
                       style={{
@@ -1863,12 +1821,12 @@ export default function App() {
 
               <div className="cards-body">
                 <button
-                  className="card-side-nav prev"
-                  onClick={goToPreviousCard}
-                  title="کارت قبلی"
+                  className="card-side-nav next"
+                  onClick={goToNextCard}
+                  title="کارت بعدی"
                   type="button"
                 >
-                  <ChevronLeft size={24} />
+                  <ChevronRight size={24} />
                 </button>
 
                 <div
@@ -2019,12 +1977,12 @@ export default function App() {
                 </div>
 
                 <button
-                  className="card-side-nav next"
-                  onClick={goToNextCard}
-                  title="کارت بعدی"
+                  className="card-side-nav prev"
+                  onClick={goToPreviousCard}
+                  title="کارت قبلی"
                   type="button"
                 >
-                  <ChevronRight size={24} />
+                  <ChevronLeft size={24} />
                 </button>
               </div>
             </section>
@@ -2034,3 +1992,4 @@ export default function App() {
     </div>
   );
 }
+```
