@@ -244,7 +244,7 @@ const STORAGE_SETTINGS = "moviepluss:lastSettings:v2";
 export default function App() {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
-  const splitContainerRef = useRef(null);
+  const splitHandleRef = useRef(null);
   const cardsRef = useRef(null);
 
   const cuesRef = useRef([]);
@@ -584,10 +584,14 @@ export default function App() {
   const dragStateRef = useRef({ dragging: false, startClientY: 0, startCardsRatio: 0, totalHeight: 1 });
 
   const onStartDrag = useCallback((e) => {
-    const el = splitContainerRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const totalH = rect.height || 1;
+    const playerEl = playerRef.current;
+    if (!playerEl) return;
+    // Measure the whole player (video + handle + cards) so the ratio math
+    // is correct in every layout mode (windowed, fullscreen, mobile),
+    // and subtract the handle's own height since it doesn't grow/shrink.
+    const totalPlayerHeight = playerEl.getBoundingClientRect().height || 1;
+    const handleHeight = splitHandleRef.current?.getBoundingClientRect().height || 10;
+    const totalH = Math.max(1, totalPlayerHeight - handleHeight);
     dragStateRef.current.dragging = true;
     dragStateRef.current.startClientY = e.clientY;
     dragStateRef.current.startCardsRatio = cardsRatio;
@@ -750,16 +754,24 @@ export default function App() {
           border: 1px solid ${COLORS.border};
           border-radius: 14px;
           background: #000;
-          width: 100%; height: auto;
+          width: 100%;
+          /* A real, defined height in every mode is what makes the video/cards
+             percentage split mean something — without it flex-basis has no
+             space to divide and dragging the handle does nothing. */
+          height: min(74vh, 720px);
           display: flex; flex-direction: column;
         }
 
-        .video-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+        /* Single source of truth for the video/cards split — applies the same
+           way whether we're windowed, fullscreen, or on mobile, so the video
+           stays flush against the top of the cards section everywhere and
+           the split handle behaves consistently in every mode. */
+        .video-section { flex: 1 1 ${videoBasis}; min-height: 0; display: flex; flex-direction: column; }
         .video-stage { position: relative; flex: 1 1 auto; background: #000; overflow: hidden; }
         .video-stage video { width: 100%; height: 100%; object-fit: contain; background: #000; touch-action: none; }
 
         .split-handle {
-          height: 10px; cursor: ns-resize;
+          flex: 0 0 10px; height: 10px; cursor: ns-resize;
           background: rgba(255,255,255,0.04);
           border-top: 1px solid rgba(255,255,255,0.06);
           border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -768,11 +780,12 @@ export default function App() {
         .split-handle:active { background: rgba(242,201,76,0.12); }
 
         .cards-section {
-          flex: 0 0 auto;
+          flex: 0 0 ${cardsBasis};
+          min-height: 90px;
           display: flex; flex-direction: column;
           background: ${COLORS.panel};
           border-top: 1px solid ${COLORS.border};
-          overflow: hidden; padding-bottom: 4px;
+          overflow: hidden; padding-bottom: 14px;
         }
         .cards-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: ${COLORS.muted}; font-size: 12px; padding: 10px 14px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); flex-shrink: 0; }
         .cards-body { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; align-items: stretch; position: relative; }
@@ -814,18 +827,26 @@ export default function App() {
         .upload-section > * { min-height: 42px; }
         .upload-section .hint { align-self: stretch; border-radius: 8px; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.08); color: ${COLORS.muted}; font-size: 12px; background: rgba(0,0,0,.10); display: flex; align-items: center; justify-content: center; text-align: center; }
 
-        /* Fullscreen styles */
-        .movie-player:fullscreen { height: 100%; width: 100%; border-radius: 0; display: flex; flex-direction: column; }
-        .movie-player:fullscreen .video-section { flex: 1 1 ${videoBasis}; }
-        .movie-player:fullscreen .cards-section { flex: 0 0 ${cardsBasis}; }
+        /* Fullscreen styles — the video/cards split itself already comes from
+           the base .video-section/.cards-section rule above; fullscreen just
+           needs to claim the full screen height and leave a little breathing
+           room at the very bottom instead of touching the screen edge. */
+        .movie-player:fullscreen {
+          height: 100%; width: 100%; border-radius: 0;
+          display: flex; flex-direction: column;
+          padding-bottom: 14px;
+        }
 
         /* Mobile specific styles */
         @media (max-width: 767px) {
           .upload-section { grid-template-columns: 1fr !important; }
-          .movie-player { min-height: 100vh !important; border-radius: 0; }
-          .video-section { flex-basis: ${videoBasis} !important; }
-          .cards-section { flex-basis: ${cardsBasis} !important; border-top-width: 0; }
-          .split-handle { height: 12px; }
+          .movie-player {
+            height: 100dvh !important;
+            border-radius: 0;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+          }
+          .split-handle { flex-basis: 12px; height: 12px; }
+          .cards-section { border-top-width: 0; }
           .card-side-nav { flex-basis: 40px; width: 40px; }
           .cards-container { scroll-snap-type: x mandatory; padding: 10px calc(50% - 115px); }
           .subtitle-card { min-width: 230px; max-width: 230px; }
@@ -902,7 +923,7 @@ export default function App() {
               </label>
             ) : (
               <>
-                <div className="video-section" ref={splitContainerRef} style={{ flexBasis: videoBasis }}>
+                <div className="video-section">
                   <div className="video-stage">
                     <video
                       ref={videoRef}
@@ -972,9 +993,9 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="split-handle" onPointerDown={onStartDrag} title="تغییر ارتفاع" />
+                <div ref={splitHandleRef} className="split-handle" onPointerDown={onStartDrag} title="تغییر ارتفاع" />
 
-                <section className="cards-section" style={{ flexBasis: cardsBasis }}>
+                <section className="cards-section">
                   <div className="cards-header">
                     <span>کارت‌ها ({cues.length})</span>
                     <span>کارت {currentCue >= 0 ? currentCue + 1 : "-"}</span>
