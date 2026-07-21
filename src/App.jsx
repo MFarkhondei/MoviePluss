@@ -330,8 +330,15 @@ export default function App() {
   const holdingRef = useRef(false);
   const gestureRef = useRef({ pointerId: null });
 
-  const isMobileViewport =
-    typeof window !== "undefined" ? window.matchMedia("(max-width: 900px)").matches : false;
+  // واکنش‌گرا بودن به تغییر عرض صفحه
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)");
+    const handler = (e) => setIsMobileViewport(e.matches);
+    handler(mql); // مقدار اولیه
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
 
   useEffect(() => {
     try {
@@ -955,6 +962,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
 
+  // اسکرول خودکار کارت فعال به وسط
   useEffect(() => {
     if (dragStateRef.current.dragging) return;
     if (currentCue < 0 || !cardsRef.current) return;
@@ -963,19 +971,13 @@ export default function App() {
     const cardElement = containerEl.querySelector?.('[data-card="' + currentCue + '"]');
     if (!cardElement) return;
 
-    const isVertical = cardsLayout === "vertical";
-
-    if (isVertical) {
-      const targetTop =
-        cardElement.offsetTop - containerEl.clientHeight / 2 + cardElement.offsetHeight / 2;
-      containerEl.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
-    } else {
-      const targetLeft =
-        cardElement.offsetLeft -
-        (containerEl.clientWidth - cardElement.offsetWidth) / 2;
-      containerEl.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
-    }
-  }, [currentCue, cardsLayout]);
+    // مطمئن‌ترین روش: scrollIntoView با inline: center
+    cardElement.scrollIntoView({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest",
+    });
+  }, [currentCue]);
 
   const videoBasis = useMemo(() => ((1 - cardsRatio) * 100).toFixed(2) + "%", [cardsRatio]);
   const cardsBasis = useMemo(() => (cardsRatio * 100).toFixed(2) + "%", [cardsRatio]);
@@ -1268,10 +1270,6 @@ export default function App() {
           line-height: 1.5;
         }
 
-        .mobile-time-row {
-          display: none;
-        }
-
         @media (max-width: 900px) {
           .movie-player {
             min-height: auto !important;
@@ -1281,14 +1279,14 @@ export default function App() {
             padding: 54px 10px 12px !important;
           }
 
+          .player-controls .controls-row {
+            align-items: center !important;
+            gap: 8px !important;
+          }
+
           .player-controls .desktop-time {
             min-width: auto !important;
             font-size: 10px !important;
-          }
-
-          .player-controls .controls-row {
-            align-items: flex-end !important;
-            gap: 8px !important;
           }
 
           .player-controls .right-controls {
@@ -1373,8 +1371,7 @@ export default function App() {
             direction: ltr !important;
             scroll-snap-type: x mandatory;
             justify-content: flex-start;
-            padding-left: calc(50% - 115px);
-            padding-right: calc(50% - 115px);
+            padding: 12px calc(50% - 120px);
           }
 
           .subtitle-card {
