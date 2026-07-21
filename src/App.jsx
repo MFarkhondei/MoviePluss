@@ -1,3 +1,4 @@
+```jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
@@ -317,7 +318,6 @@ export default function App() {
   const [subtitleBottom, setSubtitleBottom] = useState(70);
   const [subtitleBackground, setSubtitleBackground] = useState(true);
 
-  // NEW: card font size setting
   const [cardFontSize, setCardFontSize] = useState(12);
 
   const [wordPopup, setWordPopup] = useState(null);
@@ -326,6 +326,7 @@ export default function App() {
   const activeCue = currentCue >= 0 ? cuesRef.current[currentCue] : null;
 
   const holdingRef = useRef(false);
+  const gestureRef = useRef({ pointerId: null });
 
   useEffect(() => {
     try {
@@ -350,6 +351,7 @@ export default function App() {
 
       if (typeof s?.volume === "number") setVolume(Math.max(0, Math.min(1, s.volume)));
     } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -409,7 +411,7 @@ export default function App() {
           subtitleBottom,
           subtitleBackground,
           volume,
-          cardFontSize, // NEW
+          cardFontSize,
         })
       );
     } catch {}
@@ -518,13 +520,13 @@ export default function App() {
 
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
+
     const time = videoRef.current.currentTime;
     setCurrentTime(time);
 
     const list = cuesRef.current;
     const index = currentCueRef.current;
 
-    // NEW: holding finger -> ignore repeat and go to next cue
     if (holdingRef.current && index >= 0 && list[index]) {
       const current = list[index];
       const next = list[index + 1];
@@ -604,6 +606,16 @@ export default function App() {
     currentCueRef.current = -1;
   }, [englishText, persianText]);
 
+  useEffect(() => {
+    if (englishText || persianText) applySubtitlesNow();
+    else {
+      setCues([]);
+      cuesRef.current = [];
+      setCurrentCue(-1);
+      currentCueRef.current = -1;
+    }
+  }, [englishText, persianText, applySubtitlesNow]);
+
   const handleSubtitleFile = async (file, language) => {
     if (!file) return;
     const result = await autoDecodeFile(file);
@@ -618,16 +630,6 @@ export default function App() {
       setPersianText(result.text);
     }
   };
-
-  useEffect(() => {
-    if (englishText || persianText) applySubtitlesNow();
-    else {
-      setCues([]);
-      cuesRef.current = [];
-      setCurrentCue(-1);
-      currentCueRef.current = -1;
-    }
-  }, [englishText, persianText, applySubtitlesNow]);
 
   const changeSubtitleEncoding = async (language, encoding) => {
     if (language === "en") {
@@ -647,8 +649,6 @@ export default function App() {
       console.error(error);
     }
   };
-
-  const gestureRef = useRef({ pointerId: null });
 
   const onVideoPointerDown = useCallback(
     (e) => {
@@ -738,6 +738,7 @@ export default function App() {
   useEffect(() => {
     const onDocClick = (e) => {
       if (suppressOutsideClickRef.current) return;
+
       const target = e.target;
       if (!target) return;
 
@@ -757,6 +758,7 @@ export default function App() {
   const fetchWordTranslation = useCallback(async (word) => {
     const clean = (word || "").trim();
     if (!clean) return "";
+
     const key = `word:${clean.toLowerCase()}`;
     if (translationWordCacheRef.current[key]) return translationWordCacheRef.current[key];
 
@@ -788,10 +790,16 @@ export default function App() {
           });
           return;
         }
+
         const fa = await fetchWordTranslation(clean);
         setWordPopup({ cardIndex, word: clean, text: fa, loading: false });
       } catch {
-        setWordPopup({ cardIndex, word: clean, text: "خطا در دریافت ترجمه", loading: false });
+        setWordPopup({
+          cardIndex,
+          word: clean,
+          text: "خطا در دریافت ترجمه",
+          loading: false,
+        });
       }
     },
     [fetchWordTranslation]
@@ -947,7 +955,6 @@ export default function App() {
   }, [currentCue, cardsLayout]);
 
   const videoBasis = useMemo(() => `${(1 - cardsRatio) * 100}%`, [cardsRatio]);
-  const cardsBasis = useMemo(() => `${cardsRatio * 100}%`, [cardsRatio]);
 
   return (
     <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
@@ -973,17 +980,41 @@ export default function App() {
           min-height: 520px;
         }
 
-        .top-area {
-          flex: 1 1 auto;
-          min-height: 0;
-          display: flex;
-          flex-direction: column;
+        @media (max-width: 900px) and (orientation: landscape) {
+          .movie-player {
+            flex-direction: row;
+          }
+
+          .mp-left {
+            flex: 0 0 52%;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+          }
+
+          .mp-right {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+          }
+
+          .split-handle { display: none !important; }
+          .top-area { flex: 0 0 auto; }
+
+          .cards-container {
+            flex-direction: column !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            direction: rtl !important;
+          }
         }
 
         .video-stage {
           background: #000;
           min-height: 0;
           position: relative;
+          flex: 1 1 auto;
         }
 
         .video-stage video {
@@ -993,6 +1024,13 @@ export default function App() {
           object-fit: contain;
           background: #000;
           touch-action: none;
+        }
+
+        .top-area {
+          flex: 1 1 auto;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
         }
 
         .split-handle {
@@ -1015,6 +1053,10 @@ export default function App() {
           display: flex;
           flex-direction: column;
           overflow: hidden;
+        }
+
+        @media (max-width: 900px) and (orientation: landscape) {
+          .cards-section { border-top: none; border-left: 1px solid ${COLORS.border}; }
         }
 
         .cards-header {
@@ -1046,6 +1088,56 @@ export default function App() {
           border-color: ${COLORS.yellow};
           color: ${COLORS.yellow};
           background: rgba(242,201,76,.15);
+        }
+
+        .cards-body {
+          flex: 1 1 auto;
+          min-height: 0;
+          display: flex;
+          overflow: hidden;
+          align-items: stretch;
+          position: relative;
+        }
+
+        .card-side-nav {
+          flex: 0 0 52px;
+          width: 52px;
+          border: none;
+          outline: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: ${COLORS.text};
+          background: rgba(255,255,255,0.03);
+          backdrop-filter: blur(2px);
+          position: relative;
+          z-index: 2;
+        }
+
+        .card-side-nav.prev {
+          border-left: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .card-side-nav.next {
+          border-right: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .card-side-nav::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            to bottom,
+            rgba(255,255,255,0.02),
+            rgba(255,255,255,0.04),
+            rgba(255,255,255,0.02)
+          );
+          pointer-events: none;
+        }
+
+        .card-side-nav svg {
+          color: ${COLORS.yellow};
         }
 
         .cards-container {
@@ -1099,29 +1191,25 @@ export default function App() {
           user-select: none;
         }
 
-        .bottom-quickbar {
-          flex: 0 0 auto;
-          z-index: 60;
-          padding: 14px 14px 18px;
-          background: linear-gradient(
-            rgba(13,15,21,0),
-            rgba(13,15,21,.55) 25%,
-            rgba(13,15,21,.98)
-          );
-          border-top: 1px solid rgba(255,255,255,0.06);
+        .video-bottom-controls {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 10px;
+          z-index: 95;
+          display: flex;
+          justify-content: center;
+          pointer-events: none;
         }
 
-        .bottom-quickbar-inner {
-          direction: ltr;
+        .video-bottom-controls-inner {
+          pointer-events: auto;
+          direction: rtl;
           display: flex;
           align-items: center;
-          justify-content: space-between;
+          justify-content: center;
           gap: 12px;
-          padding: 12px 12px;
-          border: 1px solid rgba(255,255,255,0.06);
-          border-radius: 18px;
-          background: rgba(10,12,18,.62);
-          backdrop-filter: blur(8px);
+          padding: 0;
         }
 
         .quick-btn {
@@ -1129,8 +1217,8 @@ export default function App() {
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 104px;
-          height: 64px;
+          width: 56px;
+          height: 52px;
           border-radius: 16px;
           border: 1px solid rgba(255,255,255,0.10);
           background: rgba(0,0,0,.25);
@@ -1139,13 +1227,71 @@ export default function App() {
           user-select: none;
           padding: 0;
         }
+
         .quick-btn.play {
-          width: 140px;
-          height: 64px;
-          border-radius: 18px;
+          width: 56px;
+          height: 52px;
+          border-radius: 16px;
           background: rgba(242,201,76,.16);
           border-color: rgba(242,201,76,.35);
           color: ${COLORS.yellow};
+        }
+
+        .word-popup-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 8px;
+        }
+
+        .word-popup-close {
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          border: 1px solid ${COLORS.border};
+          background: rgba(0,0,0,.25);
+          color: ${COLORS.text};
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .upload-section {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr auto;
+          gap: 14px;
+          padding: 20px;
+          background: ${COLORS.panel};
+          border-bottom: 1px solid ${COLORS.border};
+          align-items: stretch;
+        }
+        .upload-section > * { min-height: 42px; }
+        .upload-section .hint {
+          align-self: stretch;
+          border-radius: 8px;
+          padding: 10px 12px;
+          border: 1px solid rgba(255,255,255,0.08);
+          color: ${COLORS.muted};
+          font-size: 12px;
+          background: rgba(0,0,0,.10);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          line-height: 1.5;
+        }
+
+        @media (max-width: 900px) {
+          .card-side-nav {
+            flex-basis: 46px;
+            width: 46px;
+          }
+        }
+
+        @media (max-width: 767px) {
+          .upload-section { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
@@ -1176,34 +1322,6 @@ export default function App() {
 
       {filesOpen && (
         <section className="upload-section">
-          <style>{`
-            .upload-section {
-              display: grid;
-              grid-template-columns: 1fr 1fr 1fr auto;
-              gap: 14px;
-              padding: 20px;
-              background: ${COLORS.panel};
-              border-bottom: 1px solid ${COLORS.border};
-              align-items: stretch;
-            }
-            .upload-section > * { min-height: 42px; }
-            .upload-section .hint {
-              align-self: stretch;
-              border-radius: 8px;
-              padding: 10px 12px;
-              border: 1px solid rgba(255,255,255,0.08);
-              color: ${COLORS.muted};
-              fontSize: 12px;
-              background: rgba(0,0,0,.10);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              text-align: center;
-              line-height: 1.5;
-            }
-            @media (max-width: 767px) { .upload-section { grid-template-columns: 1fr !important; } }
-          `}</style>
-
           <label style={uploadBoxStyle()}>
             <Film size={18} color={COLORS.yellow} />
             {videoName || "انتخاب فایل ویدیو"}
@@ -1246,31 +1364,31 @@ export default function App() {
           onMouseLeave={() => setControlsVisible(false)}
           style={{ minHeight: videoUrl ? 560 : 320 }}
         >
-          {!videoUrl ? (
-            <label
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                minHeight: 360,
-                gap: 12,
-                color: COLORS.muted,
-                cursor: "pointer",
-                fontFamily: "'Vazirmatn', sans-serif",
-              }}
-            >
-              <Play size={50} color={COLORS.yellow} />
-              برای انتخاب فیلم کلیک کنید
-              <input
-                type="file"
-                accept="video/*"
-                onChange={(event) => handleVideoFile(event.target.files?.[0])}
-                style={{ display: "none" }}
-              />
-            </label>
-          ) : (
-            <>
+          <div className="mp-left">
+            {!videoUrl ? (
+              <label
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: 360,
+                  gap: 12,
+                  color: COLORS.muted,
+                  cursor: "pointer",
+                  fontFamily: "'Vazirmatn', sans-serif",
+                }}
+              >
+                <Play size={50} color={COLORS.yellow} />
+                برای انتخاب فیلم کلیک کنید
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(event) => handleVideoFile(event.target.files?.[0])}
+                  style={{ display: "none" }}
+                />
+              </label>
+            ) : (
               <div className="top-area" ref={splitContainerRef}>
                 <div
                   className="video-stage"
@@ -1579,6 +1697,19 @@ export default function App() {
                     )}
                   </div>
 
+                  <div className="video-bottom-controls">
+                    <div className="video-bottom-controls-inner">
+                      <button
+                        className="quick-btn play"
+                        onClick={togglePlay}
+                        title={isPlaying ? "توقف" : "شروع"}
+                        type="button"
+                      >
+                        {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+                      </button>
+                    </div>
+                  </div>
+
                   {activeCue && (
                     <div
                       style={{
@@ -1637,195 +1768,206 @@ export default function App() {
                 </div>
 
                 <div className="split-handle" onPointerDown={onStartDrag} title="تغییر ارتفاع" />
-
-                <section
-                  className="cards-section"
-                  style={{ flex: `0 0 ${cardsBasis}`, height: cardsBasis, minHeight: 0 }}
-                >
-                  <div className="cards-header">
-                    <span>کارت‌ها ({cues.length})</span>
-
-                    <div className="cards-layout-toggle">
-                      <button
-                        type="button"
-                        title="نمایش افقی زیر فیلم"
-                        onClick={() => setCardsLayout("horizontal")}
-                        className={cardsLayout === "horizontal" ? "active" : ""}
-                      >
-                        <PanelBottom size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        title="نمایش عمودی کنار فیلم"
-                        onClick={() => setCardsLayout("vertical")}
-                        className={cardsLayout === "vertical" ? "active" : ""}
-                      >
-                        <PanelRight size={14} />
-                      </button>
-                    </div>
-
-                    <span>کارت {currentCue >= 0 ? currentCue + 1 : "-"}</span>
-                  </div>
-
-                  <div
-                    ref={cardsRef}
-                    className="cards-container"
-                    style={{
-                      flexDirection: cardsLayout === "vertical" ? "column" : "row",
-                      overflowX: cardsLayout === "vertical" ? "hidden" : "auto",
-                      overflowY: cardsLayout === "vertical" ? "auto" : "hidden",
-                      direction: cardsLayout === "vertical" ? "rtl" : "ltr",
-                    }}
-                  >
-                    {cues.length > 0 ? (
-                      cues.map((cue, index) => {
-                        const translating = !!cardTranslateLoading[index];
-                        const faMissing = !cue.fa || !cue.fa.trim();
-                        const canShowTranslateBtn = faMissing && !!cue.en?.trim();
-                        const isWordPopupHere = wordPopup && wordPopup.cardIndex === index;
-
-                        return (
-                          <div
-                            key={index}
-                            data-card={index}
-                            className="subtitle-card"
-                            onClick={() => jumpToCue(index, true)}
-                            style={{
-                              border: `1px solid ${
-                                currentCue === index ? COLORS.yellow : COLORS.border
-                              }`,
-                              borderRadius: 10,
-                              background: currentCue === index ? COLORS.active : COLORS.card,
-                              cursor: "pointer",
-                              direction: "rtl",
-                              fontFamily: "'Vazirmatn', sans-serif",
-                              padding: 11,
-                              minWidth: cardsLayout === "horizontal" ? 230 : undefined,
-                              maxWidth: cardsLayout === "horizontal" ? 230 : undefined,
-                            }}
-                          >
-                            {isWordPopupHere && (
-                              <div className="word-popup" onClick={(e) => e.stopPropagation()}>
-                                <div className="word-popup-header">
-                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    <span style={{ color: COLORS.yellow, fontWeight: 900, fontSize: 13 }}>
-                                      {wordPopup.word}
-                                    </span>
-                                  </div>
-                                  <button
-                                    className="word-popup-close"
-                                    type="button"
-                                    onClick={() => setWordPopup(null)}
-                                    aria-label="بستن"
-                                    title="بستن"
-                                  >
-                                    <X size={16} />
-                                  </button>
-                                </div>
-                                <div style={{ color: COLORS.teal, fontSize: 14, fontWeight: 800, lineHeight: 1.6 }}>
-                                  {wordPopup.text}
-                                </div>
-                              </div>
-                            )}
-
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                marginBottom: 8,
-                                color: COLORS.muted,
-                                fontSize: Math.max(9, cardFontSize - 2),
-                              }}
-                            >
-                              <span>کارت {index + 1}</span>
-                              <span>{formatTime(cue.start)}</span>
-                            </div>
-
-                            {cue.en && (
-                              <div
-                                style={{
-                                  color: COLORS.yellow,
-                                  fontSize: cardFontSize,
-                                  lineHeight: 1.6,
-                                  direction: "ltr",
-                                  textAlign: "left",
-                                }}
-                              >
-                                {renderEnglish(cue.en, `card-${index}`, index)}
-                              </div>
-                            )}
-
-                            {canShowTranslateBtn && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  translateCardToPersian(index);
-                                }}
-                                disabled={translating}
-                                style={{
-                                  width: "100%",
-                                  marginTop: 10,
-                                  border: `1px solid ${COLORS.border}`,
-                                  background: "rgba(0,0,0,.25)",
-                                  color: COLORS.text,
-                                  padding: "9px 10px",
-                                  borderRadius: 10,
-                                  cursor: translating ? "not-allowed" : "pointer",
-                                  fontFamily: "'Vazirmatn', sans-serif",
-                                  fontSize: Math.max(10, cardFontSize - 1),
-                                  fontWeight: 900,
-                                }}
-                              >
-                                {translating ? "در حال ترجمه..." : "ترجمه به فارسی"}
-                              </button>
-                            )}
-
-                            {cue.fa && cue.fa.trim() && (
-                              <div
-                                style={{
-                                  marginTop: 10,
-                                  color: COLORS.teal,
-                                  fontSize: cardFontSize,
-                                  lineHeight: 1.7,
-                                  textAlign: "right",
-                                  whiteSpace: "pre-wrap",
-                                }}
-                              >
-                                {cue.fa}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div style={{ padding: 18, color: COLORS.muted, fontSize: 13 }}>
-                        با انتخاب زیرنویس‌ها، کارت‌ها نمایش داده می‌شوند.
-                      </div>
-                    )}
-                  </div>
-                </section>
               </div>
+            )}
+          </div>
 
-              <div className="bottom-quickbar">
-                <div className="bottom-quickbar-inner">
-                  <button className="quick-btn" onClick={goToPreviousCard} title="کارت قبلی" type="button">
-                    <ChevronLeft size={26} />
+          <div className="mp-right">
+            <section className="cards-section" style={{ flex: "1 1 auto", minHeight: 0 }}>
+              <div className="cards-header">
+                <span>کارت‌ها ({cues.length})</span>
+
+                <div className="cards-layout-toggle">
+                  <button
+                    type="button"
+                    title="نمایش افقی زیر فیلم"
+                    onClick={() => setCardsLayout("horizontal")}
+                    className={cardsLayout === "horizontal" ? "active" : ""}
+                  >
+                    <PanelBottom size={14} />
                   </button>
-
-                  <button className="quick-btn play" onClick={togglePlay} title={isPlaying ? "توقف" : "شروع"} type="button">
-                    {isPlaying ? <Pause size={26} /> : <Play size={26} />}
-                  </button>
-
-                  <button className="quick-btn" onClick={goToNextCard} title="کارت بعدی" type="button">
-                    <ChevronRight size={26} />
+                  <button
+                    type="button"
+                    title="نمایش عمودی کنار فیلم"
+                    onClick={() => setCardsLayout("vertical")}
+                    className={cardsLayout === "vertical" ? "active" : ""}
+                  >
+                    <PanelRight size={14} />
                   </button>
                 </div>
+
+                <span>کارت {currentCue >= 0 ? currentCue + 1 : "-"}</span>
               </div>
-            </>
-          )}
+
+              <div className="cards-body">
+                <button
+                  className="card-side-nav prev"
+                  onClick={goToPreviousCard}
+                  title="کارت قبلی"
+                  type="button"
+                >
+                  <ChevronLeft size={24} />
+                </button>
+
+                <div
+                  ref={cardsRef}
+                  className="cards-container"
+                  style={{
+                    flexDirection: cardsLayout === "vertical" ? "column" : "row",
+                    overflowX: cardsLayout === "vertical" ? "hidden" : "auto",
+                    overflowY: cardsLayout === "vertical" ? "auto" : "hidden",
+                    direction: cardsLayout === "vertical" ? "rtl" : "ltr",
+                  }}
+                >
+                  {cues.length > 0 ? (
+                    cues.map((cue, index) => {
+                      const translating = !!cardTranslateLoading[index];
+                      const faMissing = !cue.fa || !cue.fa.trim();
+                      const canShowTranslateBtn = faMissing && !!cue.en?.trim();
+                      const isWordPopupHere = wordPopup && wordPopup.cardIndex === index;
+
+                      return (
+                        <div
+                          key={index}
+                          data-card={index}
+                          className="subtitle-card"
+                          onClick={() => jumpToCue(index, true)}
+                          style={{
+                            border: `1px solid ${
+                              currentCue === index ? COLORS.yellow : COLORS.border
+                            }`,
+                            borderRadius: 10,
+                            background: currentCue === index ? COLORS.active : COLORS.card,
+                            cursor: "pointer",
+                            direction: "rtl",
+                            fontFamily: "'Vazirmatn', sans-serif",
+                            padding: 11,
+                            minWidth: cardsLayout === "horizontal" ? 230 : undefined,
+                            maxWidth: cardsLayout === "horizontal" ? 230 : undefined,
+                          }}
+                        >
+                          {isWordPopupHere && (
+                            <div className="word-popup" onClick={(e) => e.stopPropagation()}>
+                              <div className="word-popup-header">
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  <span style={{ color: COLORS.yellow, fontWeight: 900, fontSize: 13 }}>
+                                    {wordPopup.word}
+                                  </span>
+                                </div>
+                                <button
+                                  className="word-popup-close"
+                                  type="button"
+                                  onClick={() => setWordPopup(null)}
+                                  aria-label="بستن"
+                                  title="بستن"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                              <div
+                                style={{
+                                  color: COLORS.teal,
+                                  fontSize: 14,
+                                  fontWeight: 800,
+                                  lineHeight: 1.6,
+                                }}
+                              >
+                                {wordPopup.text}
+                              </div>
+                            </div>
+                          )}
+
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginBottom: 8,
+                              color: COLORS.muted,
+                              fontSize: Math.max(9, cardFontSize - 2),
+                            }}
+                          >
+                            <span>کارت {index + 1}</span>
+                            <span>{formatTime(cue.start)}</span>
+                          </div>
+
+                          {cue.en && (
+                            <div
+                              style={{
+                                color: COLORS.yellow,
+                                fontSize: cardFontSize,
+                                lineHeight: 1.6,
+                                direction: "ltr",
+                                textAlign: "left",
+                              }}
+                            >
+                              {renderEnglish(cue.en, `card-${index}`, index)}
+                            </div>
+                          )}
+
+                          {canShowTranslateBtn && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                translateCardToPersian(index);
+                              }}
+                              disabled={translating}
+                              style={{
+                                width: "100%",
+                                marginTop: 10,
+                                border: `1px solid ${COLORS.border}`,
+                                background: "rgba(0,0,0,.25)",
+                                color: COLORS.text,
+                                padding: "9px 10px",
+                                borderRadius: 10,
+                                cursor: translating ? "not-allowed" : "pointer",
+                                fontFamily: "'Vazirmatn', sans-serif",
+                                fontSize: Math.max(10, cardFontSize - 1),
+                                fontWeight: 900,
+                              }}
+                            >
+                              {translating ? "در حال ترجمه..." : "ترجمه به فارسی"}
+                            </button>
+                          )}
+
+                          {cue.fa && cue.fa.trim() && (
+                            <div
+                              style={{
+                                marginTop: 10,
+                                color: COLORS.teal,
+                                fontSize: cardFontSize,
+                                lineHeight: 1.7,
+                                textAlign: "right",
+                                whiteSpace: "pre-wrap",
+                              }}
+                            >
+                              {cue.fa}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div style={{ padding: 18, color: COLORS.muted, fontSize: 13 }}>
+                      با انتخاب زیرنویس‌ها، کارت‌ها نمایش داده می‌شوند.
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  className="card-side-nav next"
+                  onClick={goToNextCard}
+                  title="کارت بعدی"
+                  type="button"
+                >
+                  <ChevronRight size={24} />
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
       </main>
     </div>
   );
 }
+```
