@@ -1,4 +1,3 @@
-```jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
@@ -45,20 +44,25 @@ function timeToSeconds(value = "") {
 
 function formatTime(value = 0) {
   if (!Number.isFinite(value)) return "00:00";
+
   const hours = Math.floor(value / 3600);
   const minutes = Math.floor((value % 3600) / 60);
   const seconds = Math.floor(value % 60);
 
+  const hh = String(hours).padStart(2, "0");
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+
   if (hours > 0) {
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(
-      seconds
-    ).padStart(2, "0")}`;
+    return hh + ":" + mm + ":" + ss;
   }
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+
+  return mm + ":" + ss;
 }
 
 function parseSubtitleText(raw = "") {
   if (!raw.trim()) return [];
+
   return raw
     .replace(/\r/g, "")
     .replace(/^WEBVTT.*\n+/i, "")
@@ -121,8 +125,12 @@ async function autoDecodeFile(file) {
   const invalidChars = utf8.match(/\uFFFD/g)?.length || 0;
 
   if (invalidChars > 3) {
-    return { text: decodeBuffer(buffer, "windows-1256"), encoding: "windows-1256" };
+    return {
+      text: decodeBuffer(buffer, "windows-1256"),
+      encoding: "windows-1256",
+    };
   }
+
   return { text: utf8, encoding: "utf-8" };
 }
 
@@ -137,7 +145,7 @@ function buttonStyle() {
     alignItems: "center",
     gap: 7,
     padding: "8px 12px",
-    border: `1px solid ${COLORS.border}`,
+    border: "1px solid " + COLORS.border,
     borderRadius: 8,
     background: COLORS.card,
     color: COLORS.text,
@@ -153,7 +161,7 @@ function uploadBoxStyle() {
     gap: 8,
     minHeight: 42,
     padding: "8px 12px",
-    border: `1px dashed ${COLORS.border}`,
+    border: "1px dashed " + COLORS.border,
     borderRadius: 8,
     background: COLORS.card,
     color: COLORS.text,
@@ -168,7 +176,7 @@ function selectStyle(full = false) {
     width: full ? "100%" : "auto",
     minHeight: 32,
     padding: "3px 7px",
-    border: `1px solid ${COLORS.border}`,
+    border: "1px solid " + COLORS.border,
     borderRadius: 6,
     outline: "none",
     background: COLORS.card,
@@ -208,6 +216,7 @@ function SettingRange({ label, value, min, max, onChange, step = 1 }) {
 
 function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) {
   const label = language === "en" ? "زیرنویس انگلیسی" : "زیرنویس فارسی";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <label
@@ -216,7 +225,7 @@ function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) 
           alignItems: "center",
           gap: 7,
           padding: "8px 10px",
-          border: `1px dashed ${COLORS.border}`,
+          border: "1px dashed " + COLORS.border,
           borderRadius: 8,
           background: COLORS.card,
           color: COLORS.text,
@@ -271,7 +280,6 @@ export default function App() {
   const translationCacheRef = useRef({});
   const translationWordCacheRef = useRef({});
   const hideControlsTimerRef = useRef(null);
-
   const suppressOutsideClickRef = useRef(false);
 
   const [cardsRatio, setCardsRatio] = useState(0.4);
@@ -298,7 +306,6 @@ export default function App() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
-
   const [playbackRate, setPlaybackRate] = useState(1);
 
   const [repeatOn, setRepeatOn] = useState(true);
@@ -313,13 +320,11 @@ export default function App() {
   const [cardsLayout, setCardsLayout] = useState("horizontal");
 
   const [brightness, setBrightness] = useState(100);
-
   const [subtitleSize, setSubtitleSize] = useState(100);
   const [subtitleBottom, setSubtitleBottom] = useState(70);
   const [subtitleBackground, setSubtitleBackground] = useState(true);
 
   const [cardFontSize, setCardFontSize] = useState(12);
-
   const [wordPopup, setWordPopup] = useState(null);
   const [cardTranslateLoading, setCardTranslateLoading] = useState({});
 
@@ -334,24 +339,21 @@ export default function App() {
       if (!raw) return;
       const s = JSON.parse(raw);
 
-      if (typeof s?.cardsRatio === "number")
+      if (typeof s?.cardsRatio === "number") {
         setCardsRatio(Math.max(minCardsRatio, Math.min(maxCardsRatio, s.cardsRatio)));
+      }
       if (typeof s?.playbackRate === "number") setPlaybackRate(s.playbackRate);
       if (typeof s?.repeatOn === "boolean") setRepeatOn(s.repeatOn);
       if (typeof s?.showEnglish === "boolean") setShowEnglish(s.showEnglish);
       if (typeof s?.showPersian === "boolean") setShowPersian(s.showPersian);
       if (typeof s?.cardsLayout === "string") setCardsLayout(s.cardsLayout);
       if (typeof s?.brightness === "number") setBrightness(s.brightness);
-
       if (typeof s?.subtitleSize === "number") setSubtitleSize(s.subtitleSize);
       if (typeof s?.subtitleBottom === "number") setSubtitleBottom(s.subtitleBottom);
       if (typeof s?.subtitleBackground === "boolean") setSubtitleBackground(s.subtitleBackground);
-
       if (typeof s?.cardFontSize === "number") setCardFontSize(s.cardFontSize);
-
       if (typeof s?.volume === "number") setVolume(Math.max(0, Math.min(1, s.volume)));
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -381,9 +383,8 @@ export default function App() {
   }, []);
 
   const saveCurrentTime = useCallback(() => {
-    if (!videoName) return;
-    const key = `${STORAGE_LAST_TIME_PREFIX}${videoName}`;
-    if (!videoRef.current) return;
+    if (!videoName || !videoRef.current) return;
+    const key = STORAGE_LAST_TIME_PREFIX + videoName;
     try {
       localStorage.setItem(key, String(videoRef.current.currentTime || 0));
     } catch {}
@@ -437,7 +438,9 @@ export default function App() {
   const showControlsTemporarily = useCallback(() => {
     setControlsVisible(true);
     clearTimeout(hideControlsTimerRef.current);
-    if (isPlaying) hideControlsTimerRef.current = setTimeout(() => setControlsVisible(false), 3500);
+    if (isPlaying) {
+      hideControlsTimerRef.current = setTimeout(() => setControlsVisible(false), 3500);
+    }
   }, [isPlaying]);
 
   useEffect(() => {
@@ -473,10 +476,8 @@ export default function App() {
   const seekBy = useCallback(
     (seconds) => {
       if (!videoRef.current) return;
-      const nextTime = Math.max(
-        0,
-        Math.min(duration || videoRef.current.duration || 0, videoRef.current.currentTime + seconds)
-      );
+      const total = duration || videoRef.current.duration || 0;
+      const nextTime = Math.max(0, Math.min(total, videoRef.current.currentTime + seconds));
       videoRef.current.currentTime = nextTime;
       setCurrentTime(nextTime);
       showControlsTemporarily();
@@ -506,8 +507,9 @@ export default function App() {
 
   const goToPreviousCard = useCallback(() => {
     const previousIndex = currentCueRef.current - 1;
-    if (previousIndex >= 0) jumpToCue(previousIndex, true);
-    else if (videoRef.current) {
+    if (previousIndex >= 0) {
+      jumpToCue(previousIndex, true);
+    } else if (videoRef.current) {
       videoRef.current.currentTime = 0;
       setCurrentTime(0);
     }
@@ -559,12 +561,13 @@ export default function App() {
 
   const handleVideoLoaded = () => {
     if (!videoRef.current) return;
+
     setDuration(videoRef.current.duration || 0);
     videoRef.current.volume = volume;
     videoRef.current.playbackRate = playbackRate;
 
     if (videoName) {
-      const key = `${STORAGE_LAST_TIME_PREFIX}${videoName}`;
+      const key = STORAGE_LAST_TIME_PREFIX + videoName;
       const saved = localStorage.getItem(key);
       const t = saved ? Number(saved) : 0;
       if (Number.isFinite(t) && t >= 0) {
@@ -587,7 +590,6 @@ export default function App() {
     setDuration(0);
     setCurrentCue(-1);
     currentCueRef.current = -1;
-
     setIsPlaying(false);
     setWordPopup(null);
 
@@ -607,8 +609,9 @@ export default function App() {
   }, [englishText, persianText]);
 
   useEffect(() => {
-    if (englishText || persianText) applySubtitlesNow();
-    else {
+    if (englishText || persianText) {
+      applySubtitlesNow();
+    } else {
       setCues([]);
       cuesRef.current = [];
       setCurrentCue(-1);
@@ -655,7 +658,6 @@ export default function App() {
       if (!videoRef.current) return;
       gestureRef.current.pointerId = e.pointerId;
       holdingRef.current = true;
-
       videoRef.current.playbackRate = playbackRate * 2;
       setControlsVisible(false);
 
@@ -677,7 +679,6 @@ export default function App() {
 
       holdingRef.current = false;
       gestureRef.current.pointerId = null;
-
       videoRef.current.playbackRate = playbackRate;
       setControlsVisible(true);
       showControlsTemporarily();
@@ -723,12 +724,14 @@ export default function App() {
       next = Math.max(minCardsRatio, Math.min(maxCardsRatio, next));
       setCardsRatio(next);
     };
+
     const onUp = () => {
       dragStateRef.current.dragging = false;
     };
 
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp);
+
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
@@ -759,12 +762,15 @@ export default function App() {
     const clean = (word || "").trim();
     if (!clean) return "";
 
-    const key = `word:${clean.toLowerCase()}`;
+    const key = "word:" + clean.toLowerCase();
     if (translationWordCacheRef.current[key]) return translationWordCacheRef.current[key];
 
     const response = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|fa`
+      "https://api.mymemory.translated.net/get?q=" +
+        encodeURIComponent(clean) +
+        "&langpair=en|fa"
     );
+
     const data = await response.json();
     const faText = data?.responseData?.translatedText || "ترجمه پیدا نشد";
     translationWordCacheRef.current[key] = faText;
@@ -780,7 +786,7 @@ export default function App() {
       setWordPopup({ cardIndex, word: clean, text: "ترجمه...", loading: true });
 
       try {
-        const cacheKey = `word:${clean.toLowerCase()}`;
+        const cacheKey = "word:" + clean.toLowerCase();
         if (translationWordCacheRef.current[cacheKey]) {
           setWordPopup({
             cardIndex,
@@ -815,7 +821,7 @@ export default function App() {
     setCardTranslateLoading((prev) => ({ ...prev, [cueIndex]: true }));
 
     const enText = cue.en.trim();
-    const key = `card:${enText}`;
+    const key = "card:" + enText;
 
     try {
       if (translationCacheRef.current[key]) {
@@ -825,13 +831,19 @@ export default function App() {
           next[cueIndex] = { ...next[cueIndex], fa: cachedFa };
           return next;
         });
-        cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: cachedFa } : c));
+
+        cuesRef.current = cuesRef.current.map((c, i) =>
+          i === cueIndex ? { ...c, fa: cachedFa } : c
+        );
         return;
       }
 
       const response = await fetch(
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(enText)}&langpair=en|fa`
+        "https://api.mymemory.translated.net/get?q=" +
+          encodeURIComponent(enText) +
+          "&langpair=en|fa"
       );
+
       const data = await response.json();
       const faText = data?.responseData?.translatedText || "ترجمه پیدا نشد";
       translationCacheRef.current[key] = faText;
@@ -841,15 +853,22 @@ export default function App() {
         next[cueIndex] = { ...next[cueIndex], fa: faText };
         return next;
       });
-      cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: faText } : c));
+
+      cuesRef.current = cuesRef.current.map((c, i) =>
+        i === cueIndex ? { ...c, fa: faText } : c
+      );
     } catch {
       const faText = "خطا در دریافت ترجمه";
+
       setCues((prev) => {
         const next = [...prev];
         next[cueIndex] = { ...next[cueIndex], fa: faText };
         return next;
       });
-      cuesRef.current = cuesRef.current.map((c, i) => (i === cueIndex ? { ...c, fa: faText } : c));
+
+      cuesRef.current = cuesRef.current.map((c, i) =>
+        i === cueIndex ? { ...c, fa: faText } : c
+      );
     } finally {
       setCardTranslateLoading((prev) => {
         const n = { ...prev };
@@ -869,10 +888,10 @@ export default function App() {
       if (clickable) {
         return (
           <span
-            key={`${prefix}-${index}`}
+            key={prefix + "-" + index}
             data-word-token="1"
             style={{
-              borderBottom: `1px dotted ${COLORS.yellow}`,
+              borderBottom: "1px dotted " + COLORS.yellow,
               cursor: "pointer",
               color: COLORS.yellow,
               fontWeight: 700,
@@ -884,7 +903,9 @@ export default function App() {
               suppressOutsideClickRef.current = true;
               setWordPopup({ cardIndex, word: String(token), text: "ترجمه...", loading: true });
               translateWordPopup(token, cardIndex);
-              setTimeout(() => (suppressOutsideClickRef.current = false), 120);
+              setTimeout(() => {
+                suppressOutsideClickRef.current = false;
+              }, 120);
             }}
           >
             {token}
@@ -894,9 +915,9 @@ export default function App() {
 
       return (
         <span
-          key={`${prefix}-${index}`}
+          key={prefix + "-" + index}
           style={{
-            borderBottom: `1px dotted ${COLORS.yellow}`,
+            borderBottom: "1px dotted " + COLORS.yellow,
             cursor: "default",
           }}
         >
@@ -939,10 +960,11 @@ export default function App() {
     if (currentCue < 0 || !cardsRef.current) return;
 
     const containerEl = cardsRef.current;
-    const cardElement = containerEl.querySelector?.(`[data-card="${currentCue}"]`);
+    const cardElement = containerEl.querySelector?.('[data-card="' + currentCue + '"]');
     if (!cardElement) return;
 
     const isVertical = cardsLayout === "vertical";
+
     if (isVertical) {
       const targetTop =
         cardElement.offsetTop - containerEl.clientHeight / 2 + cardElement.offsetHeight / 2;
@@ -954,19 +976,23 @@ export default function App() {
     }
   }, [currentCue, cardsLayout]);
 
-  const videoBasis = useMemo(() => `${(1 - cardsRatio) * 100}%`, [cardsRatio]);
+  const videoBasis = useMemo(() => ((1 - cardsRatio) * 100).toFixed(2) + "%", [cardsRatio]);
 
   return (
     <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
       <style>{`
         * { box-sizing: border-box; }
+
         body {
           margin: 0;
           background: ${COLORS.bg};
           overflow-x: hidden;
           font-family: 'Vazirmatn', sans-serif;
         }
-        button, input, textarea, select { font-family: 'Vazirmatn', sans-serif; }
+
+        button, input, textarea, select {
+          font-family: 'Vazirmatn', sans-serif;
+        }
 
         .movie-player {
           position: relative;
@@ -981,9 +1007,7 @@ export default function App() {
         }
 
         @media (max-width: 900px) and (orientation: landscape) {
-          .movie-player {
-            flex-direction: row;
-          }
+          .movie-player { flex-direction: row; }
 
           .mp-left {
             flex: 0 0 52%;
@@ -1043,7 +1067,10 @@ export default function App() {
           z-index: 10;
           flex: 0 0 auto;
         }
-        .split-handle:active { background: rgba(242,201,76,0.12); }
+
+        .split-handle:active {
+          background: rgba(242,201,76,0.12);
+        }
 
         .cards-section {
           background: ${COLORS.panel};
@@ -1056,7 +1083,10 @@ export default function App() {
         }
 
         @media (max-width: 900px) and (orientation: landscape) {
-          .cards-section { border-top: none; border-left: 1px solid ${COLORS.border}; }
+          .cards-section {
+            border-top: none;
+            border-left: 1px solid ${COLORS.border};
+          }
         }
 
         .cards-header {
@@ -1071,7 +1101,11 @@ export default function App() {
           flex: 0 0 auto;
         }
 
-        .cards-layout-toggle { display: flex; gap: 4px; }
+        .cards-layout-toggle {
+          display: flex;
+          gap: 4px;
+        }
+
         .cards-layout-toggle button {
           display: flex;
           align-items: center;
@@ -1084,6 +1118,7 @@ export default function App() {
           color: ${COLORS.muted};
           cursor: pointer;
         }
+
         .cards-layout-toggle button.active {
           border-color: ${COLORS.yellow};
           color: ${COLORS.yellow};
@@ -1150,14 +1185,34 @@ export default function App() {
           scroll-behavior: smooth;
         }
 
-        .cards-container::-webkit-scrollbar { height: 6px; width: 6px; }
-        .cards-container::-webkit-scrollbar-track { background: ${COLORS.bg}; border-radius: 3px; }
-        .cards-container::-webkit-scrollbar-thumb { background: ${COLORS.border}; border-radius: 3px; }
-        .cards-container::-webkit-scrollbar-thumb:hover { background: ${COLORS.muted}; }
+        .cards-container::-webkit-scrollbar {
+          height: 6px;
+          width: 6px;
+        }
 
-        .subtitle-card { position: relative; z-index: 1; }
+        .cards-container::-webkit-scrollbar-track {
+          background: ${COLORS.bg};
+          border-radius: 3px;
+        }
 
-        .player-controls.hidden { opacity: 0; pointer-events: none; }
+        .cards-container::-webkit-scrollbar-thumb {
+          background: ${COLORS.border};
+          border-radius: 3px;
+        }
+
+        .cards-container::-webkit-scrollbar-thumb:hover {
+          background: ${COLORS.muted};
+        }
+
+        .subtitle-card {
+          position: relative;
+          z-index: 1;
+        }
+
+        .player-controls.hidden {
+          opacity: 0;
+          pointer-events: none;
+        }
 
         .settings-popup {
           position: absolute;
@@ -1169,7 +1224,6 @@ export default function App() {
           border: 1px solid ${COLORS.border};
           border-radius: 10px;
           background: rgba(20,23,31,.97);
-          fontFamily: "'Vazirmatn', sans-serif";
         }
 
         .word-popup {
@@ -1267,7 +1321,11 @@ export default function App() {
           border-bottom: 1px solid ${COLORS.border};
           align-items: stretch;
         }
-        .upload-section > * { min-height: 42px; }
+
+        .upload-section > * {
+          min-height: 42px;
+        }
+
         .upload-section .hint {
           align-self: stretch;
           border-radius: 8px;
@@ -1291,7 +1349,9 @@ export default function App() {
         }
 
         @media (max-width: 767px) {
-          .upload-section { grid-template-columns: 1fr !important; }
+          .upload-section {
+            grid-template-columns: 1fr !important;
+          }
         }
       `}</style>
 
@@ -1301,7 +1361,7 @@ export default function App() {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "16px 20px",
-          borderBottom: `1px solid ${COLORS.border}`,
+          borderBottom: "1px solid " + COLORS.border,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1392,7 +1452,7 @@ export default function App() {
               <div className="top-area" ref={splitContainerRef}>
                 <div
                   className="video-stage"
-                  style={{ flex: `0 0 ${videoBasis}`, height: videoBasis, minHeight: 0 }}
+                  style={{ flex: "0 0 " + videoBasis, height: videoBasis, minHeight: 0 }}
                 >
                   <video
                     ref={videoRef}
@@ -1418,11 +1478,11 @@ export default function App() {
                     onPointerMove={onVideoPointerMove}
                     onPointerUp={endGesture}
                     onPointerCancel={endGesture}
-                    style={{ filter: `brightness(${brightness}%)` }}
+                    style={{ filter: "brightness(" + brightness + "%)" }}
                   />
 
                   <div
-                    className={`player-controls ${controlsVisible ? "" : "hidden"}`}
+                    className={"player-controls " + (controlsVisible ? "" : "hidden")}
                     style={{
                       position: "absolute",
                       right: 0,
@@ -1485,7 +1545,7 @@ export default function App() {
                               width: 38,
                               height: 36,
                               borderRadius: 10,
-                              border: `1px solid ${COLORS.border}`,
+                              border: "1px solid " + COLORS.border,
                               background: "rgba(0,0,0,.25)",
                               color: COLORS.text,
                               cursor: "pointer",
@@ -1504,7 +1564,7 @@ export default function App() {
                               width: 38,
                               height: 36,
                               borderRadius: 10,
-                              border: `1px solid ${COLORS.border}`,
+                              border: "1px solid " + COLORS.border,
                               background: "rgba(0,0,0,.25)",
                               color: COLORS.text,
                               cursor: "pointer",
@@ -1543,13 +1603,14 @@ export default function App() {
                               تنظیمات
                             </span>
                           </div>
+
                           <button
                             onClick={() => setSettingsOpen(false)}
                             style={{
                               width: 30,
                               height: 30,
                               borderRadius: 10,
-                              border: `1px solid ${COLORS.border}`,
+                              border: "1px solid " + COLORS.border,
                               background: "rgba(0,0,0,.25)",
                               color: COLORS.text,
                               cursor: "pointer",
@@ -1734,7 +1795,7 @@ export default function App() {
                             borderRadius: 6,
                             background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent",
                             color: COLORS.yellow,
-                            fontSize: `${17 * (subtitleSize / 100)}px`,
+                            fontSize: 17 * (subtitleSize / 100),
                             fontWeight: 700,
                             textAlign: "center",
                             direction: "ltr",
@@ -1753,7 +1814,7 @@ export default function App() {
                             borderRadius: 6,
                             background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent",
                             color: COLORS.teal,
-                            fontSize: `${17 * (subtitleSize / 100)}px`,
+                            fontSize: 17 * (subtitleSize / 100),
                             fontWeight: 700,
                             textAlign: "center",
                             fontFamily: "'Vazirmatn', sans-serif",
@@ -1786,6 +1847,7 @@ export default function App() {
                   >
                     <PanelBottom size={14} />
                   </button>
+
                   <button
                     type="button"
                     title="نمایش عمودی کنار فیلم"
@@ -1833,9 +1895,9 @@ export default function App() {
                           className="subtitle-card"
                           onClick={() => jumpToCue(index, true)}
                           style={{
-                            border: `1px solid ${
-                              currentCue === index ? COLORS.yellow : COLORS.border
-                            }`,
+                            border:
+                              "1px solid " +
+                              (currentCue === index ? COLORS.yellow : COLORS.border),
                             borderRadius: 10,
                             background: currentCue === index ? COLORS.active : COLORS.card,
                             cursor: "pointer",
@@ -1854,6 +1916,7 @@ export default function App() {
                                     {wordPopup.word}
                                   </span>
                                 </div>
+
                                 <button
                                   className="word-popup-close"
                                   type="button"
@@ -1864,6 +1927,7 @@ export default function App() {
                                   <X size={16} />
                                 </button>
                               </div>
+
                               <div
                                 style={{
                                   color: COLORS.teal,
@@ -1900,7 +1964,7 @@ export default function App() {
                                 textAlign: "left",
                               }}
                             >
-                              {renderEnglish(cue.en, `card-${index}`, index)}
+                              {renderEnglish(cue.en, "card-" + index, index)}
                             </div>
                           )}
 
@@ -1915,7 +1979,7 @@ export default function App() {
                               style={{
                                 width: "100%",
                                 marginTop: 10,
-                                border: `1px solid ${COLORS.border}`,
+                                border: "1px solid " + COLORS.border,
                                 background: "rgba(0,0,0,.25)",
                                 color: COLORS.text,
                                 padding: "9px 10px",
