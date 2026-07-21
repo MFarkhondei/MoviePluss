@@ -856,7 +856,7 @@ export default function App() {
       `}</style>
 
       {/* =========================
-           HEADER (ONLY MODIFIED)
+           HEADER (UPDATED)
          ========================= */}
       <header
         style={{
@@ -887,7 +887,8 @@ export default function App() {
           </div>
 
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: ".2px" }}>
+            {/* TITLE COLOR GOLD */}
+            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: ".2px", color: COLORS.yellow }}>
               فیلم پلاس
             </div>
             <div style={{ color: "rgba(146,153,170,1)", fontSize: 11, marginTop: 3 }}>
@@ -989,44 +990,17 @@ export default function App() {
                       />
                       <div
                         className="controls-row"
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 10,
-                          whiteSpace: "nowrap",
-                        }}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, whiteSpace: "nowrap" }}
                       >
-                        <span
-                          className="desktop-time"
-                          style={{
-                            color: COLORS.text,
-                            fontSize: 11,
-                            direction: "ltr",
-                            flexShrink: 0,
-                          }}
-                        >
+                        <span className="desktop-time" style={{ color: COLORS.text, fontSize: 11, direction: "ltr", flexShrink: 0 }}>
                           {formatTime(currentTime)} / {formatTime(duration)}{" "}
-                          <span style={{ color: COLORS.muted }}>
-                            (-{formatTime(Math.max(0, duration - currentTime))})
-                          </span>
+                          <span style={{ color: COLORS.muted }}>(-{formatTime(Math.max(0, duration - currentTime))})</span>
                         </span>
                         <div style={{ flex: 1, minWidth: 6 }} />
                         <div className="right-controls" style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <button
                             onClick={togglePlay}
-                            style={{
-                              width: 38,
-                              height: 36,
-                              borderRadius: 10,
-                              border: `1px solid ${COLORS.border}`,
-                              background: "rgba(0,0,0,.25)",
-                              color: COLORS.text,
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
+                            style={{ width: 38, height: 36, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                             title={isPlaying ? "توقف" : "شروع"}
                           >
                             {isPlaying ? <Pause size={18} /> : <Play size={18} />}
@@ -1034,18 +1008,7 @@ export default function App() {
 
                           <button
                             onClick={() => setSettingsOpen((v) => !v)}
-                            style={{
-                              width: 38,
-                              height: 36,
-                              borderRadius: 10,
-                              border: `1px solid ${COLORS.border}`,
-                              background: "rgba(0,0,0,.25)",
-                              color: COLORS.text,
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
+                            style={{ width: 38, height: 36, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                             title="تنظیمات"
                           >
                             <Settings size={18} />
@@ -1053,18 +1016,7 @@ export default function App() {
 
                           <button
                             onClick={toggleFullscreen}
-                            style={{
-                              width: 38,
-                              height: 36,
-                              borderRadius: 10,
-                              border: `1px solid ${COLORS.border}`,
-                              background: "rgba(0,0,0,.25)",
-                              color: COLORS.text,
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
+                            style={{ width: 38, height: 36, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                             title="تمام صفحه"
                           >
                             {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
@@ -1076,36 +1028,12 @@ export default function App() {
 
                   {settingsOpen && (
                     <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 10,
-                          marginBottom: 10,
-                          paddingBottom: 10,
-                          borderBottom: "1px solid rgba(255,255,255,0.06)",
-                        }}
-                      >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <Settings size={16} color={COLORS.yellow} />
-                          <span style={{ color: COLORS.text, fontSize: 12, fontWeight: 800 }}>
-                            تنظیمات
-                          </span>
+                          <span style={{ color: COLORS.text, fontSize: 12, fontWeight: 800 }}>تنظیمات</span>
                         </div>
-                        <button
-                          onClick={() => setSettingsOpen(false)}
-                          style={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: 10,
-                            border: `1px solid ${COLORS.border}`,
-                            background: "rgba(0,0,0,.25)",
-                            color: COLORS.text,
-                            cursor: "pointer",
-                          }}
-                          title="بستن"
-                        >
+                        <button onClick={() => setSettingsOpen(false)} style={{ width: 30, height: 30, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer" }} title="بستن">
                           <X size={16} />
                         </button>
                       </div>
@@ -1117,14 +1045,7 @@ export default function App() {
                           <span>سرعت پخش</span>
                           <span style={{ color: COLORS.muted }}>{playbackRate.toFixed(2)}x</span>
                         </div>
-                        <input
-                          type="range"
-                          min={0.5}
-                          max={2}
-                          step={0.05}
-                          value={playbackRate}
-                          onChange={(e) => setPlaybackRate(Number(e.target.value))}
-                        />
+                        <input type="range" min={0.5} max={2} step={0.05} value={playbackRate} onChange={(e) => setPlaybackRate(Number(e.target.value))} />
                       </label>
 
                       <SettingRange label="اندازه فونت کارت‌ها" value={cardFontSize} min={10} max={22} onChange={setCardFontSize} />
@@ -1154,54 +1075,14 @@ export default function App() {
                   )}
 
                   {activeCue && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        right: 0,
-                        bottom: subtitleBottom,
-                        left: 0,
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: 5,
-                        padding: "0 18px",
-                        pointerEvents: "none",
-                        zIndex: 1000,
-                      }}
-                    >
+                    <div style={{ position: "absolute", right: 0, bottom: subtitleBottom, left: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "0 18px", pointerEvents: "none", zIndex: 1000 }}>
                       {showEnglish && activeCue.en && (
-                        <div
-                          style={{
-                            maxWidth: "92%",
-                            padding: subtitleBackground ? "5px 12px" : "2px 4px",
-                            borderRadius: 6,
-                            background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent",
-                            color: COLORS.yellow,
-                            fontSize: 17 * (subtitleSize / 100),
-                            fontWeight: 700,
-                            textAlign: "center",
-                            direction: "ltr",
-                            pointerEvents: "auto",
-                          }}
-                        >
+                        <div style={{ maxWidth: "92%", padding: subtitleBackground ? "5px 12px" : "2px 4px", borderRadius: 6, background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent", color: COLORS.yellow, fontSize: 17 * (subtitleSize / 100), fontWeight: 700, textAlign: "center", direction: "ltr", pointerEvents: "auto" }}>
                           {renderEnglish(activeCue.en, "overlay", -1)}
                         </div>
                       )}
-
                       {showPersian && activeCue.fa && (
-                        <div
-                          style={{
-                            maxWidth: "92%",
-                            padding: subtitleBackground ? "5px 12px" : "2px 4px",
-                            borderRadius: 6,
-                            background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent",
-                            color: COLORS.teal,
-                            fontSize: 17 * (subtitleSize / 100),
-                            fontWeight: 700,
-                            textAlign: "center",
-                            pointerEvents: "auto",
-                          }}
-                        >
+                        <div style={{ maxWidth: "92%", padding: subtitleBackground ? "5px 12px" : "2px 4px", borderRadius: 6, background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent", color: COLORS.teal, fontSize: 17 * (subtitleSize / 100), fontWeight: 700, textAlign: "center", pointerEvents: "auto" }}>
                           {activeCue.fa}
                         </div>
                       )}
@@ -1250,42 +1131,22 @@ export default function App() {
                             {isWordPopupHere && (
                               <div className="word-popup" onClick={(e) => e.stopPropagation()}>
                                 <div className="word-popup-header">
-                                  <span style={{ color: COLORS.yellow, fontWeight: 900, fontSize: 13 }}>
-                                    {wordPopup.word}
-                                  </span>
+                                  <span style={{ color: COLORS.yellow, fontWeight: 900, fontSize: 13 }}>{wordPopup.word}</span>
                                   <button className="word-popup-close" onClick={() => setWordPopup(null)}>
                                     <X size={16} />
                                   </button>
                                 </div>
-                                <div style={{ color: COLORS.teal, fontSize: 14, fontWeight: 800, lineHeight: 1.6 }}>
-                                  {wordPopup.text}
-                                </div>
+                                <div style={{ color: COLORS.teal, fontSize: 14, fontWeight: 800, lineHeight: 1.6 }}>{wordPopup.text}</div>
                               </div>
                             )}
 
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                marginBottom: 8,
-                                color: COLORS.muted,
-                                fontSize: Math.max(9, cardFontSize - 2),
-                              }}
-                            >
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, color: COLORS.muted, fontSize: Math.max(9, cardFontSize - 2) }}>
                               <span>کارت {index + 1}</span>
                               <span>{formatTime(cue.start)}</span>
                             </div>
 
                             {cue.en && (
-                              <div
-                                style={{
-                                  color: COLORS.yellow,
-                                  fontSize: cardFontSize,
-                                  lineHeight: 1.6,
-                                  direction: "ltr",
-                                  textAlign: "left",
-                                }}
-                              >
+                              <div style={{ color: COLORS.yellow, fontSize: cardFontSize, lineHeight: 1.6, direction: "ltr", textAlign: "left" }}>
                                 {renderEnglish(cue.en, `card-${index}`, index)}
                               </div>
                             )}
@@ -1324,9 +1185,7 @@ export default function App() {
                         );
                       })
                     ) : (
-                      <div style={{ padding: 18, color: COLORS.muted, fontSize: 13 }}>
-                        با انتخاب زیرنویس‌ها، کارت‌ها نمایش داده می‌شوند.
-                      </div>
+                      <div style={{ padding: 18, color: COLORS.muted, fontSize: 13 }}>با انتخاب زیرنویس‌ها، کارت‌ها نمایش داده می‌شوند.</div>
                     )}
                   </div>
 
