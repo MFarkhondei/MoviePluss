@@ -817,7 +817,7 @@ export default function App() {
         .player-controls { position: absolute; right: 0; left: 0; bottom: 0; padding: 70px 14px 18px; background: linear-gradient(transparent, rgba(0,0,0,.9)); z-index: 80; }
         .player-controls.hidden { opacity: 0; pointer-events: none; }
 
-        .settings-popup { position: absolute; top: 14px; left: 14px; z-index: 90; width: 260px; padding: 14px; border: 1px solid ${COLORS.border}; border-radius: 10px; background: rgba(20,23,31,.97); }
+        .settings-popup { position: absolute; top: 14px; left: 14px; z-index: 90; width: 260px; max-height: calc(100% - 28px); overflow-y: auto; padding: 14px; border: 1px solid ${COLORS.border}; border-radius: 10px; background: rgba(20,23,31,.97); }
 
         .word-popup { position: absolute; z-index: 300; top: -10px; left: 0; right: 0; margin: 0 auto; width: calc(100% - 18px); max-width: 320px; background: rgba(20,23,31,.97); border: 1px solid ${COLORS.border}; border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.5); padding: 10px 12px; transform: translateY(-100%); direction: rtl; user-select: none; }
         .word-popup-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
@@ -958,31 +958,31 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-
-                      {settingsOpen && (
-                        <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <Settings size={16} color={COLORS.yellow} />
-                              <span style={{ color: COLORS.text, fontSize: 12, fontWeight: 800 }}>تنظیمات</span>
-                            </div>
-                            <button onClick={() => setSettingsOpen(false)} style={{ width: 30, height: 30, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer" }} title="بستن"><X size={16} /></button>
-                          </div>
-                          <SettingRange label="روشنایی" value={brightness} min={50} max={150} onChange={setBrightness} />
-                          <label style={{ display: "block", marginBottom: 12, color: COLORS.text, fontSize: 11 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}><span>سرعت پخش</span><span style={{ color: COLORS.muted }}>{playbackRate.toFixed(2)}x</span></div>
-                            <input type="range" min={0.5} max={2} step={0.05} value={playbackRate} onChange={(e) => setPlaybackRate(Number(e.target.value))} />
-                          </label>
-                          <SettingRange label="اندازه فونت کارت‌ها" value={cardFontSize} min={10} max={22} onChange={setCardFontSize} />
-                          <SettingRange label="اندازه زیرنویس" value={subtitleSize} min={60} max={180} onChange={setSubtitleSize} />
-                          <SettingRange label="موقعیت زیرنویس" value={subtitleBottom} min={5} max={180} onChange={setSubtitleBottom} />
-                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>پس‌زمینه زیرنویس<input type="checkbox" checked={subtitleBackground} onChange={(e) => setSubtitleBackground(e.target.checked)} /></label>
-                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>نمایش زیرنویس انگلیسی<input type="checkbox" checked={showEnglish} onChange={(e) => setShowEnglish(e.target.checked)} /></label>
-                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>نمایش زیرنویس فارسی<input type="checkbox" checked={showPersian} onChange={(e) => setShowPersian(e.target.checked)} /></label>
-                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>تکرار یک جمله<input type="checkbox" checked={repeatOn} onChange={(e) => setRepeatOn(e.target.checked)} /></label>
-                        </div>
-                      )}
                     </div>
+
+                    {settingsOpen && (
+                      <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Settings size={16} color={COLORS.yellow} />
+                            <span style={{ color: COLORS.text, fontSize: 12, fontWeight: 800 }}>تنظیمات</span>
+                          </div>
+                          <button onClick={() => setSettingsOpen(false)} style={{ width: 30, height: 30, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer" }} title="بستن"><X size={16} /></button>
+                        </div>
+                        <SettingRange label="روشنایی" value={brightness} min={50} max={150} onChange={setBrightness} />
+                        <label style={{ display: "block", marginBottom: 12, color: COLORS.text, fontSize: 11 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}><span>سرعت پخش</span><span style={{ color: COLORS.muted }}>{playbackRate.toFixed(2)}x</span></div>
+                          <input type="range" min={0.5} max={2} step={0.05} value={playbackRate} onChange={(e) => setPlaybackRate(Number(e.target.value))} />
+                        </label>
+                        <SettingRange label="اندازه فونت کارت‌ها" value={cardFontSize} min={10} max={22} onChange={setCardFontSize} />
+                        <SettingRange label="اندازه زیرنویس" value={subtitleSize} min={60} max={180} onChange={setSubtitleSize} />
+                        <SettingRange label="موقعیت زیرنویس" value={subtitleBottom} min={5} max={180} onChange={setSubtitleBottom} />
+                        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>پس‌زمینه زیرنویس<input type="checkbox" checked={subtitleBackground} onChange={(e) => setSubtitleBackground(e.target.checked)} /></label>
+                        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>نمایش زیرنویس انگلیسی<input type="checkbox" checked={showEnglish} onChange={(e) => setShowEnglish(e.target.checked)} /></label>
+                        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>نمایش زیرنویس فارسی<input type="checkbox" checked={showPersian} onChange={(e) => setShowPersian(e.target.checked)} /></label>
+                        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>تکرار یک جمله<input type="checkbox" checked={repeatOn} onChange={(e) => setRepeatOn(e.target.checked)} /></label>
+                      </div>
+                    )}
 
                     {activeCue && (
                       <div style={{ position: "absolute", right: 0, bottom: subtitleBottom, left: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "0 18px", pointerEvents: "none", zIndex: 1000 }}>
