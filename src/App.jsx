@@ -330,6 +330,9 @@ export default function App() {
   const holdingRef = useRef(false);
   const gestureRef = useRef({ pointerId: null });
 
+  const isMobileViewport =
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 900px)").matches : false;
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_SETTINGS);
@@ -968,12 +971,14 @@ export default function App() {
       containerEl.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
     } else {
       const targetLeft =
-        cardElement.offsetLeft - containerEl.clientWidth / 2 + cardElement.offsetWidth / 2;
+        cardElement.offsetLeft -
+        (containerEl.clientWidth - cardElement.offsetWidth) / 2;
       containerEl.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
     }
   }, [currentCue, cardsLayout]);
 
   const videoBasis = useMemo(() => ((1 - cardsRatio) * 100).toFixed(2) + "%", [cardsRatio]);
+  const cardsBasis = useMemo(() => (cardsRatio * 100).toFixed(2) + "%", [cardsRatio]);
 
   return (
     <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
@@ -1003,32 +1008,16 @@ export default function App() {
           min-height: 520px;
         }
 
-        @media (max-width: 900px) and (orientation: landscape) {
-          .movie-player { flex-direction: row; }
+        .mp-left,
+        .mp-right {
+          min-height: 0;
+        }
 
-          .mp-left {
-            flex: 0 0 52%;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-          }
-
-          .mp-right {
-            flex: 1 1 auto;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-          }
-
-          .split-handle { display: none !important; }
-          .top-area { flex: 0 0 auto; }
-
-          .cards-container {
-            flex-direction: column !important;
-            overflow-x: hidden !important;
-            overflow-y: auto !important;
-            direction: rtl !important;
-          }
+        .top-area {
+          flex: 1 1 auto;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
         }
 
         .video-stage {
@@ -1045,13 +1034,6 @@ export default function App() {
           object-fit: contain;
           background: #000;
           touch-action: none;
-        }
-
-        .top-area {
-          flex: 1 1 auto;
-          min-height: 0;
-          display: flex;
-          flex-direction: column;
         }
 
         .split-handle {
@@ -1077,13 +1059,6 @@ export default function App() {
           display: flex;
           flex-direction: column;
           overflow: hidden;
-        }
-
-        @media (max-width: 900px) and (orientation: landscape) {
-          .cards-section {
-            border-top: none;
-            border-left: 1px solid ${COLORS.border};
-          }
         }
 
         .cards-header {
@@ -1204,6 +1179,7 @@ export default function App() {
         .subtitle-card {
           position: relative;
           z-index: 1;
+          scroll-snap-align: center;
         }
 
         .player-controls.hidden {
@@ -1292,16 +1268,142 @@ export default function App() {
           line-height: 1.5;
         }
 
+        .mobile-time-row {
+          display: none;
+        }
+
         @media (max-width: 900px) {
+          .movie-player {
+            min-height: auto !important;
+          }
+
+          .player-controls {
+            padding: 54px 10px 12px !important;
+          }
+
+          .player-controls .desktop-time {
+            min-width: auto !important;
+            font-size: 10px !important;
+          }
+
+          .player-controls .controls-row {
+            align-items: flex-end !important;
+            gap: 8px !important;
+          }
+
+          .player-controls .right-controls {
+            gap: 8px !important;
+            flex-wrap: nowrap !important;
+          }
+
+          .player-controls .right-controls button {
+            width: 34px !important;
+            height: 34px !important;
+            min-width: 34px !important;
+            border-radius: 9px !important;
+          }
+
+          .settings-popup {
+            left: 10px;
+            right: 10px;
+            width: auto;
+            max-width: none;
+          }
+
           .card-side-nav {
-            flex-basis: 46px;
-            width: 46px;
+            flex-basis: 42px;
+            width: 42px;
+          }
+
+          .cards-container {
+            padding-left: 8px;
+            padding-right: 8px;
           }
         }
 
         @media (max-width: 767px) {
           .upload-section {
             grid-template-columns: 1fr !important;
+          }
+
+          .movie-player {
+            display: flex;
+            flex-direction: column !important;
+          }
+
+          .mp-left,
+          .mp-right {
+            width: 100%;
+            flex: 0 0 auto;
+          }
+
+          .top-area {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+          }
+
+          .video-stage {
+            flex: 0 0 auto !important;
+            height: auto !important;
+            aspect-ratio: 16 / 9;
+            min-height: 220px;
+          }
+
+          .split-handle {
+            display: block !important;
+            height: 12px;
+          }
+
+          .cards-section {
+            flex: 0 0 auto !important;
+            height: ${cardsBasis};
+            min-height: 150px;
+            max-height: 80vh;
+          }
+
+          .cards-body {
+            min-height: 0;
+          }
+
+          .cards-container {
+            flex-direction: row !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            direction: ltr !important;
+            scroll-snap-type: x mandatory;
+            justify-content: flex-start;
+            padding-left: calc(50% - 115px);
+            padding-right: calc(50% - 115px);
+          }
+
+          .subtitle-card {
+            min-width: 230px !important;
+            max-width: 230px !important;
+          }
+
+          .player-controls {
+            padding: 44px 8px 10px !important;
+          }
+
+          .player-controls .controls-row {
+            align-items: center !important;
+            gap: 8px !important;
+          }
+
+          .player-controls .desktop-time {
+            min-width: 132px !important;
+            font-size: 9px !important;
+          }
+
+          .player-controls .right-controls {
+            gap: 6px !important;
+          }
+
+          .player-controls .right-controls button {
+            width: 32px !important;
+            height: 32px !important;
+            min-width: 32px !important;
           }
         }
       `}</style>
@@ -1403,7 +1505,11 @@ export default function App() {
               <div className="top-area" ref={splitContainerRef}>
                 <div
                   className="video-stage"
-                  style={{ flex: "0 0 " + videoBasis, height: videoBasis, minHeight: 0 }}
+                  style={{
+                    flex: isMobileViewport ? "0 0 auto" : "0 0 " + videoBasis,
+                    height: isMobileViewport ? "auto" : videoBasis,
+                    minHeight: 0,
+                  }}
                 >
                   <video
                     ref={videoRef}
@@ -1462,6 +1568,7 @@ export default function App() {
                       />
 
                       <div
+                        className="controls-row"
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -1472,6 +1579,7 @@ export default function App() {
                         }}
                       >
                         <span
+                          className="desktop-time"
                           style={{
                             color: COLORS.text,
                             fontSize: 11,
@@ -1487,9 +1595,17 @@ export default function App() {
                           </span>
                         </span>
 
-                        <div style={{ flex: 1 }} />
+                        <div style={{ flex: 1, minWidth: 6 }} />
 
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" }}>
+                        <div
+                          className="right-controls"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            flex: "0 0 auto",
+                          }}
+                        >
                           <button
                             onClick={togglePlay}
                             style={{
@@ -1791,7 +1907,14 @@ export default function App() {
           </div>
 
           <div className="mp-right">
-            <section className="cards-section" style={{ flex: "1 1 auto", minHeight: 0 }}>
+            <section
+              className="cards-section"
+              style={{
+                flex: isMobileViewport ? "0 0 auto" : "1 1 auto",
+                minHeight: 0,
+                height: isMobileViewport ? cardsBasis : undefined,
+              }}
+            >
               <div className="cards-header">
                 <span>کارت‌ها ({cues.length})</span>
 
@@ -1832,10 +1955,14 @@ export default function App() {
                   ref={cardsRef}
                   className="cards-container"
                   style={{
-                    flexDirection: cardsLayout === "vertical" ? "column" : "row",
-                    overflowX: cardsLayout === "vertical" ? "hidden" : "auto",
-                    overflowY: cardsLayout === "vertical" ? "auto" : "hidden",
-                    direction: cardsLayout === "vertical" ? "rtl" : "ltr",
+                    flexDirection:
+                      isMobileViewport || cardsLayout === "horizontal" ? "row" : "column",
+                    overflowX:
+                      isMobileViewport || cardsLayout === "horizontal" ? "auto" : "hidden",
+                    overflowY:
+                      isMobileViewport || cardsLayout === "horizontal" ? "hidden" : "auto",
+                    direction:
+                      isMobileViewport || cardsLayout === "horizontal" ? "ltr" : "rtl",
                   }}
                 >
                   {cues.length > 0 ? (
@@ -1861,8 +1988,10 @@ export default function App() {
                             direction: "rtl",
                             fontFamily: "'Vazirmatn', sans-serif",
                             padding: 11,
-                            minWidth: cardsLayout === "horizontal" ? 230 : undefined,
-                            maxWidth: cardsLayout === "horizontal" ? 230 : undefined,
+                            minWidth:
+                              isMobileViewport || cardsLayout === "horizontal" ? 230 : undefined,
+                            maxWidth:
+                              isMobileViewport || cardsLayout === "horizontal" ? 230 : undefined,
                           }}
                         >
                           {isWordPopupHere && (
