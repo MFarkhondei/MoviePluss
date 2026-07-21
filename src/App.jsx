@@ -258,7 +258,7 @@ export default function App() {
 
   const [cardsRatio, setCardsRatio] = useState(0.35);
   const minCardsRatio = 0.15;
-  const maxCardsRatio = 0.75;
+  const maxCardsRatio = 0.85;
 
   const [videoUrl, setVideoUrl] = useState("");
   const [videoName, setVideoName] = useState("");
@@ -306,7 +306,6 @@ export default function App() {
   const holdingRef = useRef(false);
   const gestureRef = useRef({ pointerId: null });
 
-  // Responsive detection (mobile vs desktop)
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 767px)");
@@ -346,7 +345,7 @@ export default function App() {
   }, [volume, playbackRate]);
 
   useEffect(() => {
-    const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === playerRef.current);
+    const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
@@ -582,13 +581,7 @@ export default function App() {
     showControlsTemporarily();
   }, [playbackRate, showControlsTemporarily]);
 
-  // Split drag: fix direction (drag up -> smaller cardsRatio)
-  const dragStateRef = useRef({
-    dragging: false,
-    startClientY: 0,
-    startCardsRatio: 0,
-    totalHeight: 1,
-  });
+  const dragStateRef = useRef({ dragging: false, startClientY: 0, startCardsRatio: 0, totalHeight: 1 });
 
   const onStartDrag = useCallback((e) => {
     const el = splitContainerRef.current;
@@ -609,8 +602,7 @@ export default function App() {
       const { totalHeight, startClientY, startCardsRatio } = dragStateRef.current;
       const dy = e.clientY - startClientY;
       const deltaRatio = dy / totalHeight;
-      // Reverse: drag up (dy<0) should reduce cardsRatio
-      let next = startCardsRatio + deltaRatio;
+      let next = startCardsRatio - deltaRatio; // Drag up makes cards bigger
       next = Math.max(minCardsRatio, Math.min(maxCardsRatio, next));
       setCardsRatio(next);
     };
@@ -636,7 +628,7 @@ export default function App() {
   const fetchWordTranslation = useCallback(async (word) => {
     const clean = (word || "").trim();
     if (!clean) return "";
-    const key = "word:" + clean.toLowerCase();
+    const key = `word:${clean.toLowerCase()}`;
     if (translationWordCacheRef.current[key]) return translationWordCacheRef.current[key];
     const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|fa`);
     const data = await response.json();
@@ -651,7 +643,7 @@ export default function App() {
     if (!clean) return;
     setWordPopup({ cardIndex, word: clean, text: "ترجمه...", loading: true });
     try {
-      const cacheKey = "word:" + clean.toLowerCase();
+      const cacheKey = `word:${clean.toLowerCase()}`;
       if (translationWordCacheRef.current[cacheKey]) {
         setWordPopup({ cardIndex, word: clean, text: translationWordCacheRef.current[cacheKey], loading: false });
         return;
@@ -668,7 +660,7 @@ export default function App() {
     if (!cue || !cue.en?.trim() || (cue.fa && cue.fa.trim()) || cardTranslateLoading[cueIndex]) return;
     setCardTranslateLoading((prev) => ({ ...prev, [cueIndex]: true }));
     const enText = cue.en.trim();
-    const key = "card:" + enText;
+    const key = `card:${enText}`;
     try {
       if (translationCacheRef.current[key]) {
         const cachedFa = translationCacheRef.current[key];
@@ -701,13 +693,7 @@ export default function App() {
           <span
             key={`${prefix}-${index}`}
             data-word-token="1"
-            style={{
-              borderBottom: `1px dotted ${COLORS.yellow}`,
-              cursor: "pointer",
-              color: COLORS.yellow,
-              fontWeight: 700,
-              userSelect: "none",
-            }}
+            style={{ borderBottom: `1px dotted ${COLORS.yellow}`, cursor: "pointer", color: COLORS.yellow, fontWeight: 700, userSelect: "none" }}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -721,11 +707,7 @@ export default function App() {
           </span>
         );
       }
-      return (
-        <span key={`${prefix}-${index}`} style={{ borderBottom: `1px dotted ${COLORS.yellow}`, cursor: "default" }}>
-          {token}
-        </span>
-      );
+      return <span key={`${prefix}-${index}`} style={{ borderBottom: `1px dotted ${COLORS.yellow}`, cursor: "default" }}>{token}</span>;
     });
   };
 
@@ -745,7 +727,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [goToNextCard, goToPreviousCard, seekBy, showControlsTemporarily, toggleFullscreen, togglePlay]);
 
-  // Scroll active card into center
   useEffect(() => {
     if (dragStateRef.current.dragging) return;
     if (currentCue < 0 || !cardsRef.current) return;
@@ -754,234 +735,103 @@ export default function App() {
     cardElement.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [currentCue]);
 
-  const videoBasis = useMemo(() => `${((1 - cardsRatio) * 100).toFixed(2)}%`, [cardsRatio]);
+  const videoBasis = useMemo(() => `${(100 - (cardsRatio * 100)).toFixed(2)}%`, [cardsRatio]);
   const cardsBasis = useMemo(() => `${(cardsRatio * 100).toFixed(2)}%`, [cardsRatio]);
 
   return (
     <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif" }}>
       <style>{`
         * { box-sizing: border-box; }
-        body {
-          margin: 0;
-          background: ${COLORS.bg};
-          overflow-x: hidden;
-          font-family: 'Vazirmatn', sans-serif;
-        }
+        html, body { margin: 0; padding: 0; background: ${COLORS.bg}; font-family: 'Vazirmatn', sans-serif; }
         button, input, textarea, select { font-family: 'Vazirmatn', sans-serif; }
 
         .movie-player {
-          position: relative;
-          overflow: hidden;
+          position: relative; overflow: hidden;
           border: 1px solid ${COLORS.border};
           border-radius: 14px;
           background: #000;
-          width: 100%;
-          display: flex;
-          flex-direction: column;
-          min-height: 520px;
+          width: 100%; height: auto;
+          display: flex; flex-direction: column;
         }
 
-        .mp-left { display: flex; flex-direction: column; min-height: 0; }
-        .mp-right { min-height: 0; }
-
-        .top-area {
-          display: flex;
-          flex-direction: column;
-          flex: 1 1 auto;
-          min-height: 0;
-        }
-
-        .video-stage {
-          position: relative;
-          flex: 1 1 auto;
-          background: #000;
-          overflow: hidden;
-        }
-        .video-stage video {
-          width: 100%;
-          height: 100%;
-          object-fit: contain;
-          background: #000;
-          touch-action: none;
-        }
+        .video-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+        .video-stage { position: relative; flex: 1 1 auto; background: #000; overflow: hidden; }
+        .video-stage video { width: 100%; height: 100%; object-fit: contain; background: #000; touch-action: none; }
 
         .split-handle {
-          height: 10px;
-          cursor: ns-resize;
+          height: 10px; cursor: ns-resize;
           background: rgba(255,255,255,0.04);
           border-top: 1px solid rgba(255,255,255,0.06);
           border-bottom: 1px solid rgba(255,255,255,0.06);
-          touch-action: none;
-          z-index: 10;
+          touch-action: none; z-index: 10;
         }
         .split-handle:active { background: rgba(242,201,76,0.12); }
 
         .cards-section {
-          display: flex;
-          flex-direction: column;
+          flex: 0 0 auto;
+          display: flex; flex-direction: column;
           background: ${COLORS.panel};
           border-top: 1px solid ${COLORS.border};
-          overflow: hidden;
+          overflow: hidden; padding-bottom: 4px;
         }
-
-        .cards-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          color: ${COLORS.muted};
-          font-size: 12px;
-          padding: 10px 14px 8px;
-          border-bottom: 1px solid rgba(255,255,255,0.04);
-          flex-shrink: 0;
-        }
-
-        .cards-body {
-          display: flex;
-          flex: 1 1 auto;
-          min-height: 0;
-          overflow: hidden;
-          align-items: stretch;
-          position: relative;
-        }
+        .cards-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: ${COLORS.muted}; font-size: 12px; padding: 10px 14px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); flex-shrink: 0; }
+        .cards-body { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; align-items: stretch; position: relative; }
 
         .card-side-nav {
-          flex: 0 0 48px;
-          width: 48px;
-          border: none;
-          outline: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: ${COLORS.text};
-          background: rgba(255,255,255,0.03);
-          backdrop-filter: blur(2px);
-          position: relative;
-          z-index: 2;
+          flex: 0 0 48px; width: 48px; border: none; outline: none; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          color: ${COLORS.text}; background: rgba(255,255,255,0.03);
+          backdrop-filter: blur(2px); position: relative; z-index: 2;
         }
         .card-side-nav.prev { border-right: 1px solid rgba(255,255,255,0.05); }
         .card-side-nav.next { border-left: 1px solid rgba(255,255,255,0.05); }
-        .card-side-nav::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(to bottom, rgba(255,255,255,0.02), rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-          pointer-events: none;
-        }
+        .card-side-nav::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(255,255,255,0.02), rgba(255,255,255,0.04), rgba(255,255,255,0.02)); pointer-events: none; }
         .card-side-nav svg { color: ${COLORS.yellow}; }
 
         .cards-container {
-          flex: 1 1 auto;
-          display: flex;
-          gap: 10px;
+          flex: 1 1 auto; display: flex; gap: 10px;
           padding: 10px 14px 14px;
-          overflow-x: auto;
-          overflow-y: hidden;
-          scroll-behavior: smooth;
-          direction: ltr;
+          overflow-x: auto; overflow-y: hidden;
+          scroll-behavior: smooth; direction: ltr;
         }
         .cards-container::-webkit-scrollbar { height: 6px; }
         .cards-container::-webkit-scrollbar-track { background: ${COLORS.bg}; border-radius: 3px; }
         .cards-container::-webkit-scrollbar-thumb { background: ${COLORS.border}; border-radius: 3px; }
         .cards-container::-webkit-scrollbar-thumb:hover { background: ${COLORS.muted}; }
 
-        .subtitle-card {
-          position: relative;
-          z-index: 1;
-          scroll-snap-align: center;
-        }
+        .subtitle-card { position: relative; z-index: 1; scroll-snap-align: center; }
 
-        .player-controls {
-          position: absolute;
-          right: 0;
-          left: 0;
-          bottom: 0;
-          padding: 70px 14px 18px;
-          background: linear-gradient(transparent, rgba(0,0,0,.9));
-          z-index: 80;
-        }
+        .player-controls { position: absolute; right: 0; left: 0; bottom: 0; padding: 70px 14px 18px; background: linear-gradient(transparent, rgba(0,0,0,.9)); z-index: 80; }
         .player-controls.hidden { opacity: 0; pointer-events: none; }
 
-        .settings-popup {
-          position: absolute;
-          top: 14px;
-          left: 14px;
-          z-index: 90;
-          width: 260px;
-          padding: 14px;
-          border: 1px solid ${COLORS.border};
-          border-radius: 10px;
-          background: rgba(20,23,31,.97);
-        }
+        .settings-popup { position: absolute; top: 14px; left: 14px; z-index: 90; width: 260px; padding: 14px; border: 1px solid ${COLORS.border}; border-radius: 10px; background: rgba(20,23,31,.97); }
 
-        .word-popup {
-          position: absolute;
-          z-index: 300;
-          top: -10px;
-          left: 0;
-          right: 0;
-          margin: 0 auto;
-          width: calc(100% - 18px);
-          max-width: 320px;
-          background: rgba(20,23,31,.97);
-          border: 1px solid ${COLORS.border};
-          border-radius: 12px;
-          box-shadow: 0 14px 40px rgba(0,0,0,.5);
-          padding: 10px 12px;
-          transform: translateY(-100%);
-          direction: rtl;
-          user-select: none;
-        }
-
+        .word-popup { position: absolute; z-index: 300; top: -10px; left: 0; right: 0; margin: 0 auto; width: calc(100% - 18px); max-width: 320px; background: rgba(20,23,31,.97); border: 1px solid ${COLORS.border}; border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.5); padding: 10px 12px; transform: translateY(-100%); direction: rtl; user-select: none; }
         .word-popup-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
-        .word-popup-close {
-          width: 28px; height: 28px; border-radius: 8px;
-          border: 1px solid ${COLORS.border};
-          background: rgba(0,0,0,.25);
-          color: ${COLORS.text};
-          cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-        }
+        .word-popup-close { width: 28px; height: 28px; border-radius: 8px; border: 1px solid ${COLORS.border}; background: rgba(0,0,0,.25); color: ${COLORS.text}; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
-        .upload-section {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr auto;
-          gap: 14px;
-          padding: 20px;
-          background: ${COLORS.panel};
-          border-bottom: 1px solid ${COLORS.border};
-        }
+        .upload-section { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 14px; padding: 20px; background: ${COLORS.panel}; border-bottom: 1px solid ${COLORS.border}; }
         .upload-section > * { min-height: 42px; }
-        .upload-section .hint {
-          align-self: stretch;
-          border-radius: 8px;
-          padding: 10px 12px;
-          border: 1px solid rgba(255,255,255,0.08);
-          color: ${COLORS.muted};
-          font-size: 12px;
-          background: rgba(0,0,0,.10);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-        }
+        .upload-section .hint { align-self: stretch; border-radius: 8px; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.08); color: ${COLORS.muted}; font-size: 12px; background: rgba(0,0,0,.10); display: flex; align-items: center; justify-content: center; text-align: center; }
 
-        /* Mobile / fullscreen adaptations */
+        /* Fullscreen styles */
+        .movie-player:fullscreen { height: 100%; width: 100%; border-radius: 0; display: flex; flex-direction: column; }
+        .movie-player:fullscreen .video-section { flex: 1 1 ${videoBasis}; }
+        .movie-player:fullscreen .cards-section { flex: 0 0 ${cardsBasis}; }
+
+        /* Mobile specific styles */
         @media (max-width: 767px) {
           .upload-section { grid-template-columns: 1fr !important; }
-          .movie-player { min-height: auto !important; }
-          .mp-left, .mp-right { width: 100%; flex: 0 0 auto; }
-          .top-area { flex-direction: column; }
-          .video-stage { aspect-ratio: 16 / 9; min-height: 200px; }
+          .movie-player { min-height: 100vh !important; border-radius: 0; }
+          .video-section { flex-basis: ${videoBasis} !important; }
+          .cards-section { flex-basis: ${cardsBasis} !important; border-top-width: 0; }
           .split-handle { height: 12px; }
-          .cards-section { height: ${cardsBasis}; min-height: 130px; max-height: 80vh; }
           .card-side-nav { flex-basis: 40px; width: 40px; }
-          .cards-container { padding: 10px calc(50% - 120px); }
+          .cards-container { scroll-snap-type: x mandatory; padding: 10px calc(50% - 115px); }
           .subtitle-card { min-width: 230px; max-width: 230px; }
           .player-controls { padding: 44px 8px 10px !important; }
           .player-controls .controls-row { align-items: center !important; gap: 8px !important; }
-          .player-controls .desktop-time { min-width: 120px !important; font-size: 9px !important; }
+          .player-controls .desktop-time { min-width: auto !important; font-size: 9px !important; }
           .player-controls .right-controls { gap: 6px !important; }
           .player-controls .right-controls button { width: 32px !important; height: 32px !important; min-width: 32px !important; }
           .settings-popup { left: 6px; right: 6px; width: auto; max-width: none; }
@@ -1025,16 +875,14 @@ export default function App() {
         </section>
       )}
 
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "10px" : 20 }}>
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "0" : "20px" }}>
         <div
           ref={playerRef}
           className="movie-player"
           onMouseMove={showControlsTemporarily}
           onMouseEnter={() => setControlsVisible(true)}
           onMouseLeave={() => setControlsVisible(false)}
-          style={{ minHeight: videoUrl ? 560 : 320 }}
         >
-          <div className="mp-left">
             {!videoUrl ? (
               <label
                 style={{
@@ -1046,7 +894,6 @@ export default function App() {
                   gap: 12,
                   color: COLORS.muted,
                   cursor: "pointer",
-                  fontFamily: "'Vazirmatn', sans-serif",
                 }}
               >
                 <Play size={50} color={COLORS.yellow} />
@@ -1054,230 +901,133 @@ export default function App() {
                 <input type="file" accept="video/*" onChange={(event) => handleVideoFile(event.target.files?.[0])} style={{ display: "none" }} />
               </label>
             ) : (
-              <div className="top-area" ref={splitContainerRef}>
-                <div
-                  className="video-stage"
-                  style={{
-                    flex: isMobile ? "0 0 auto" : `0 0 ${videoBasis}`,
-                    height: isMobile ? "auto" : videoBasis,
-                  }}
-                >
-                  <video
-                    ref={videoRef}
-                    src={videoUrl}
-                    onLoadedMetadata={handleVideoLoaded}
-                    onTimeUpdate={handleTimeUpdate}
-                    onPlay={() => { setIsPlaying(true); setControlsVisible(true); }}
-                    onPause={() => { setIsPlaying(false); setControlsVisible(true); saveCurrentTime(); }}
-                    onDoubleClick={toggleFullscreen}
-                    onClick={togglePlay}
-                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onPointerDown={onVideoPointerDown}
-                    onPointerMove={onVideoPointerMove}
-                    onPointerUp={endGesture}
-                    onPointerCancel={endGesture}
-                    style={{ filter: `brightness(${brightness}%)` }}
-                  />
+              <>
+                <div className="video-section" ref={splitContainerRef} style={{ flexBasis: videoBasis }}>
+                  <div className="video-stage">
+                    <video
+                      ref={videoRef}
+                      src={videoUrl}
+                      onLoadedMetadata={handleVideoLoaded}
+                      onTimeUpdate={handleTimeUpdate}
+                      onPlay={() => { setIsPlaying(true); setControlsVisible(true); }}
+                      onPause={() => { setIsPlaying(false); setControlsVisible(true); saveCurrentTime(); }}
+                      onDoubleClick={toggleFullscreen}
+                      onClick={togglePlay}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onPointerDown={onVideoPointerDown}
+                      onPointerMove={onVideoPointerMove}
+                      onPointerUp={endGesture}
+                      onPointerCancel={endGesture}
+                      style={{ filter: `brightness(${brightness}%)` }}
+                    />
 
-                  <div
-                    className={`player-controls ${controlsVisible ? "" : "hidden"}`}
-                    onClick={(e) => e.stopPropagation()}
-                    onContextMenu={(e) => e.stopPropagation()}
-                  >
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      <input
-                        type="range"
-                        min="0"
-                        max={duration || 0}
-                        step="0.01"
-                        value={currentTime}
-                        onChange={(event) => seekTo(event.target.value)}
-                        style={{ direction: "ltr", accentColor: COLORS.yellow, width: "100%" }}
-                      />
-                      <div className="controls-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, whiteSpace: "nowrap" }}>
-                        <span className="desktop-time" style={{ color: COLORS.text, fontSize: 11, direction: "ltr", fontFamily: "'Vazirmatn', sans-serif" }}>
-                          {formatTime(currentTime)} / {formatTime(duration)}{" "}
-                          <span style={{ color: COLORS.muted }}>(-{formatTime(Math.max(0, (duration || 0) - currentTime))})</span>
-                        </span>
-                        <div style={{ flex: 1, minWidth: 6 }} />
-                        <div className="right-controls" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <button onClick={togglePlay} style={{ width: 38, height: 36, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title={isPlaying ? "توقف" : "شروع"}>
-                            {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                          </button>
-                          <button onClick={() => setSettingsOpen((v) => !v)} style={{ width: 38, height: 36, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="تنظیمات">
-                            <Settings size={18} />
-                          </button>
-                          <button onClick={toggleFullscreen} style={{ width: 38, height: 36, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="تمام صفحه">
-                            {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-                          </button>
+                    <div className={`player-controls ${controlsVisible ? "" : "hidden"}`} onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        <input type="range" min="0" max={duration || 0} step="0.01" value={currentTime} onChange={(e) => seekTo(e.target.value)} style={{ direction: "ltr", accentColor: COLORS.yellow, width: "100%" }} />
+                        <div className="controls-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, whiteSpace: "nowrap" }}>
+                          <span className="desktop-time" style={{ color: COLORS.text, fontSize: 11, direction: "ltr", flexShrink: 0 }}>
+                            {formatTime(currentTime)} / {formatTime(duration)}{" "}
+                            <span style={{ color: COLORS.muted }}>(-{formatTime(Math.max(0, duration - currentTime))})</span>
+                          </span>
+                          <div style={{ flex: 1, minWidth: 6 }} />
+                          <div className="right-controls" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <button onClick={togglePlay} style={{ width: 38, height: 36, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title={isPlaying ? "توقف" : "شروع"}>{isPlaying ? <Pause size={18} /> : <Play size={18} />}</button>
+                            <button onClick={() => setSettingsOpen((v) => !v)} style={{ width: 38, height: 36, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="تنظیمات"><Settings size={18} /></button>
+                            <button onClick={toggleFullscreen} style={{ width: 38, height: 36, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="تمام صفحه">{isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}</button>
+                          </div>
                         </div>
                       </div>
+
+                      {settingsOpen && (
+                        <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <Settings size={16} color={COLORS.yellow} />
+                              <span style={{ color: COLORS.text, fontSize: 12, fontWeight: 800 }}>تنظیمات</span>
+                            </div>
+                            <button onClick={() => setSettingsOpen(false)} style={{ width: 30, height: 30, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer" }} title="بستن"><X size={16} /></button>
+                          </div>
+                          <SettingRange label="روشنایی" value={brightness} min={50} max={150} onChange={setBrightness} />
+                          <label style={{ display: "block", marginBottom: 12, color: COLORS.text, fontSize: 11 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}><span>سرعت پخش</span><span style={{ color: COLORS.muted }}>{playbackRate.toFixed(2)}x</span></div>
+                            <input type="range" min={0.5} max={2} step={0.05} value={playbackRate} onChange={(e) => setPlaybackRate(Number(e.target.value))} />
+                          </label>
+                          <SettingRange label="اندازه فونت کارت‌ها" value={cardFontSize} min={10} max={22} onChange={setCardFontSize} />
+                          <SettingRange label="اندازه زیرنویس" value={subtitleSize} min={60} max={180} onChange={setSubtitleSize} />
+                          <SettingRange label="موقعیت زیرنویس" value={subtitleBottom} min={5} max={180} onChange={setSubtitleBottom} />
+                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>پس‌زمینه زیرنویس<input type="checkbox" checked={subtitleBackground} onChange={(e) => setSubtitleBackground(e.target.checked)} /></label>
+                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>نمایش زیرنویس انگلیسی<input type="checkbox" checked={showEnglish} onChange={(e) => setShowEnglish(e.target.checked)} /></label>
+                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>نمایش زیرنویس فارسی<input type="checkbox" checked={showPersian} onChange={(e) => setShowPersian(e.target.checked)} /></label>
+                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>تکرار یک جمله<input type="checkbox" checked={repeatOn} onChange={(e) => setRepeatOn(e.target.checked)} /></label>
+                        </div>
+                      )}
                     </div>
 
-                    {settingsOpen && (
-                      <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <Settings size={16} color={COLORS.yellow} />
-                            <span style={{ color: COLORS.text, fontSize: 12, fontWeight: 800 }}>تنظیمات</span>
-                          </div>
-                          <button onClick={() => setSettingsOpen(false)} style={{ width: 30, height: 30, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, cursor: "pointer" }} title="بستن">
-                            <X size={16} />
-                          </button>
-                        </div>
-
-                        <SettingRange label="روشنایی" value={brightness} min={50} max={150} onChange={setBrightness} step={1} />
-
-                        <label style={{ display: "block", marginBottom: 12, color: COLORS.text, fontSize: 11 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                            <span>سرعت پخش</span>
-                            <span style={{ color: COLORS.muted }}>{playbackRate.toFixed(2)}x</span>
-                          </div>
-                          <input type="range" min={0.5} max={2} step={0.05} value={playbackRate} onChange={(e) => setPlaybackRate(Number(e.target.value))} />
-                        </label>
-
-                        <SettingRange label="اندازه فونت کارت‌ها" value={cardFontSize} min={10} max={22} onChange={setCardFontSize} step={1} />
-                        <SettingRange label="اندازه زیرنویس" value={subtitleSize} min={60} max={180} onChange={setSubtitleSize} step={1} />
-                        <SettingRange label="موقعیت زیرنویس" value={subtitleBottom} min={5} max={180} onChange={setSubtitleBottom} step={1} />
-
-                        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>
-                          پس‌زمینه زیرنویس
-                          <input type="checkbox" checked={subtitleBackground} onChange={(event) => setSubtitleBackground(event.target.checked)} />
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>
-                          نمایش زیرنویس انگلیسی
-                          <input type="checkbox" checked={showEnglish} onChange={(event) => setShowEnglish(event.target.checked)} />
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>
-                          نمایش زیرنویس فارسی
-                          <input type="checkbox" checked={showPersian} onChange={(event) => setShowPersian(event.target.checked)} />
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>
-                          تکرار یک جمله
-                          <input type="checkbox" checked={repeatOn} onChange={(e) => setRepeatOn(e.target.checked)} />
-                        </label>
+                    {activeCue && (
+                      <div style={{ position: "absolute", right: 0, bottom: subtitleBottom, left: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "0 18px", pointerEvents: "none", zIndex: 1000 }}>
+                        {showEnglish && activeCue.en && <div style={{ maxWidth: "92%", padding: subtitleBackground ? "5px 12px" : "2px 4px", borderRadius: 6, background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent", color: COLORS.yellow, fontSize: 17 * (subtitleSize / 100), fontWeight: 700, textAlign: "center", direction: "ltr", pointerEvents: "auto" }}>{renderEnglish(activeCue.en, "overlay", -1)}</div>}
+                        {showPersian && activeCue.fa && <div style={{ maxWidth: "92%", padding: subtitleBackground ? "5px 12px" : "2px 4px", borderRadius: 6, background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent", color: COLORS.teal, fontSize: 17 * (subtitleSize / 100), fontWeight: 700, textAlign: "center", pointerEvents: "auto" }}>{activeCue.fa}</div>}
                       </div>
                     )}
                   </div>
-
-                  {activeCue && (
-                    <div style={{ position: "absolute", right: 0, bottom: subtitleBottom, left: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "0 18px", pointerEvents: "none", zIndex: 1000 }}>
-                      {showEnglish && activeCue.en && (
-                        <div style={{ maxWidth: "92%", padding: subtitleBackground ? "5px 12px" : "2px 4px", borderRadius: 6, background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent", color: COLORS.yellow, fontSize: 17 * (subtitleSize / 100), fontWeight: 700, textAlign: "center", direction: "ltr", pointerEvents: "auto" }}>
-                          {renderEnglish(activeCue.en, "overlay", -1)}
-                        </div>
-                      )}
-                      {showPersian && activeCue.fa && (
-                        <div style={{ maxWidth: "92%", padding: subtitleBackground ? "5px 12px" : "2px 4px", borderRadius: 6, background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent", color: COLORS.teal, fontSize: 17 * (subtitleSize / 100), fontWeight: 700, textAlign: "center", pointerEvents: "auto" }}>
-                          {activeCue.fa}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
+
                 <div className="split-handle" onPointerDown={onStartDrag} title="تغییر ارتفاع" />
-              </div>
-            )}
-          </div>
 
-          <div className="mp-right">
-            <section className="cards-section" style={{ flex: isMobile ? "0 0 auto" : "1 1 auto", height: isMobile ? cardsBasis : undefined, paddingBottom: 4 }}>
-              <div className="cards-header">
-                <span>کارت‌ها ({cues.length})</span>
-                <span>کارت {currentCue >= 0 ? currentCue + 1 : "-"}</span>
-              </div>
-
-              <div className="cards-body">
-                <button className="card-side-nav next" onClick={goToNextCard} title="کارت بعدی" type="button">
-                  <ChevronRight size={24} />
-                </button>
-
-                <div ref={cardsRef} className="cards-container">
-                  {cues.length > 0 ? (
-                    cues.map((cue, index) => {
-                      const translating = !!cardTranslateLoading[index];
-                      const faMissing = !cue.fa || !cue.fa.trim();
-                      const canShowTranslateBtn = faMissing && !!cue.en?.trim();
-                      const isWordPopupHere = wordPopup && wordPopup.cardIndex === index;
-
-                      return (
-                        <div
-                          key={index}
-                          data-card={index}
-                          className="subtitle-card"
-                          onClick={() => jumpToCue(index, true)}
-                          style={{
-                            border: `1px solid ${currentCue === index ? COLORS.yellow : COLORS.border}`,
-                            borderRadius: 10,
-                            background: currentCue === index ? COLORS.active : COLORS.card,
-                            cursor: "pointer",
-                            direction: "rtl",
-                            padding: 11,
-                            minWidth: 230,
-                            maxWidth: 230,
-                          }}
-                        >
-                          {isWordPopupHere && (
-                            <div className="word-popup" onClick={(e) => e.stopPropagation()}>
-                              <div className="word-popup-header">
-                                <span style={{ color: COLORS.yellow, fontWeight: 900, fontSize: 13 }}>{wordPopup.word}</span>
-                                <button className="word-popup-close" onClick={() => setWordPopup(null)}><X size={16} /></button>
-                              </div>
-                              <div style={{ color: COLORS.teal, fontSize: 14, fontWeight: 800, lineHeight: 1.6 }}>
-                                {wordPopup.text}
-                              </div>
-                            </div>
-                          )}
-
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, color: COLORS.muted, fontSize: Math.max(9, cardFontSize - 2) }}>
-                            <span>کارت {index + 1}</span>
-                            <span>{formatTime(cue.start)}</span>
-                          </div>
-
-                          {cue.en && (
-                            <div style={{ color: COLORS.yellow, fontSize: cardFontSize, lineHeight: 1.6, direction: "ltr", textAlign: "left" }}>
-                              {renderEnglish(cue.en, `card-${index}`, index)}
-                            </div>
-                          )}
-
-                          {canShowTranslateBtn && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); translateCardToPersian(index); }}
-                              disabled={translating}
+                <section className="cards-section" style={{ flexBasis: cardsBasis }}>
+                  <div className="cards-header">
+                    <span>کارت‌ها ({cues.length})</span>
+                    <span>کارت {currentCue >= 0 ? currentCue + 1 : "-"}</span>
+                  </div>
+                  <div className="cards-body">
+                    <button className="card-side-nav next" onClick={goToNextCard} title="کارت بعدی"><ChevronRight size={24} /></button>
+                    <div ref={cardsRef} className="cards-container">
+                      {cues.length > 0 ? (
+                        cues.map((cue, index) => {
+                          const translating = !!cardTranslateLoading[index];
+                          const faMissing = !cue.fa || !cue.fa.trim();
+                          const canShowTranslateBtn = faMissing && !!cue.en?.trim();
+                          const isWordPopupHere = wordPopup && wordPopup.cardIndex === index;
+                          return (
+                            <div
+                              key={index} data-card={index} className="subtitle-card"
+                              onClick={() => jumpToCue(index, true)}
                               style={{
-                                width: "100%", marginTop: 10,
-                                border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)",
-                                color: COLORS.text, padding: "9px 10px", borderRadius: 10,
-                                cursor: translating ? "not-allowed" : "pointer",
-                                fontSize: Math.max(10, cardFontSize - 1), fontWeight: 900,
+                                border: `1px solid ${currentCue === index ? COLORS.yellow : COLORS.border}`,
+                                borderRadius: 10,
+                                background: currentCue === index ? COLORS.active : COLORS.card,
+                                cursor: "pointer", direction: "rtl", padding: 11,
+                                minWidth: 230, maxWidth: 230,
                               }}
                             >
-                              {translating ? "در حال ترجمه..." : "ترجمه به فارسی"}
-                            </button>
-                          )}
-
-                          {cue.fa && cue.fa.trim() && (
-                            <div style={{ marginTop: 10, color: COLORS.teal, fontSize: cardFontSize, lineHeight: 1.7, textAlign: "right" }}>
-                              {cue.fa}
+                              {isWordPopupHere && (
+                                <div className="word-popup" onClick={(e) => e.stopPropagation()}>
+                                  <div className="word-popup-header">
+                                    <span style={{ color: COLORS.yellow, fontWeight: 900, fontSize: 13 }}>{wordPopup.word}</span>
+                                    <button className="word-popup-close" onClick={() => setWordPopup(null)}><X size={16} /></button>
+                                  </div>
+                                  <div style={{ color: COLORS.teal, fontSize: 14, fontWeight: 800, lineHeight: 1.6 }}>{wordPopup.text}</div>
+                                </div>
+                              )}
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, color: COLORS.muted, fontSize: Math.max(9, cardFontSize - 2) }}>
+                                <span>کارت {index + 1}</span>
+                                <span>{formatTime(cue.start)}</span>
+                              </div>
+                              {cue.en && <div style={{ color: COLORS.yellow, fontSize: cardFontSize, lineHeight: 1.6, direction: "ltr", textAlign: "left" }}>{renderEnglish(cue.en, `card-${index}`, index)}</div>}
+                              {canShowTranslateBtn && <button type="button" onClick={(e) => { e.stopPropagation(); translateCardToPersian(index); }} disabled={translating} style={{ width: "100%", marginTop: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, padding: "9px 10px", borderRadius: 10, cursor: translating ? "not-allowed" : "pointer", fontSize: Math.max(10, cardFontSize - 1), fontWeight: 900 }}>{translating ? "در حال ترجمه..." : "ترجمه به فارسی"}</button>}
+                              {cue.fa && cue.fa.trim() && <div style={{ marginTop: 10, color: COLORS.teal, fontSize: cardFontSize, lineHeight: 1.7, textAlign: "right" }}>{cue.fa}</div>}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div style={{ padding: 18, color: COLORS.muted, fontSize: 13 }}>
-                      با انتخاب زیرنویس‌ها، کارت‌ها نمایش داده می‌شوند.
+                          );
+                        })
+                      ) : (
+                        <div style={{ padding: 18, color: COLORS.muted, fontSize: 13 }}>با انتخاب زیرنویس‌ها، کارت‌ها نمایش داده می‌شوند.</div>
+                      )}
                     </div>
-                  )}
-                </div>
-
-                <button className="card-side-nav prev" onClick={goToPreviousCard} title="کارت قبلی" type="button">
-                  <ChevronLeft size={24} />
-                </button>
-              </div>
-            </section>
-          </div>
+                    <button className="card-side-nav prev" onClick={goToPreviousCard} title="کارت قبلی"><ChevronLeft size={24} /></button>
+                  </div>
+                </section>
+              </>
+            )}
         </div>
       </main>
     </div>
