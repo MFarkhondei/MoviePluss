@@ -305,6 +305,7 @@ export default function App() {
 
   const holdingRef = useRef(false);
   const gestureRef = useRef({ pointerId: null });
+  const isSeekingRef = useRef(false);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -407,6 +408,10 @@ export default function App() {
     const nextTime = Math.max(0, Math.min(total, videoRef.current.currentTime + seconds));
     videoRef.current.currentTime = nextTime;
     setCurrentTime(nextTime);
+    const list = cuesRef.current;
+    const detectedIndex = list.findIndex((cue) => nextTime >= cue.start && nextTime < cue.end);
+    currentCueRef.current = detectedIndex;
+    setCurrentCue(detectedIndex);
     showControlsTemporarily();
   }, [duration, showControlsTemporarily]);
 
@@ -415,6 +420,17 @@ export default function App() {
     const nextTime = Number(value);
     videoRef.current.currentTime = nextTime;
     setCurrentTime(nextTime);
+    // A manual seek can land anywhere — outside the cue that was "current"
+    // before the drag. If we don't update the current-cue pointer here,
+    // the repeat-single-sentence loop in handleTimeUpdate keeps comparing
+    // the new time against the OLD cue's end boundary, sees that it has
+    // been crossed, and immediately snaps playback back to the old cue's
+    // start — which looks like "the seek bar jumps back to where it was".
+    const list = cuesRef.current;
+    const detectedIndex = list.findIndex((cue) => nextTime >= cue.start && nextTime < cue.end);
+    currentCueRef.current = detectedIndex;
+    setCurrentCue(detectedIndex);
+    setWordPopup(null);
   };
 
   const jumpToCue = useCallback((index, autoplay = true) => {
@@ -440,6 +456,7 @@ export default function App() {
 
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
+    if (isSeekingRef.current) return; // user is actively dragging the seek bar — don't overwrite their position
     const time = videoRef.current.currentTime;
     setCurrentTime(time);
     const list = cuesRef.current;
@@ -944,7 +961,20 @@ export default function App() {
 
                     <div className={`player-controls ${controlsVisible ? "" : "hidden"}`} onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        <input type="range" min="0" max={duration || 0} step="0.01" value={currentTime} onChange={(e) => seekTo(e.target.value)} style={{ direction: "ltr", accentColor: COLORS.yellow, width: "100%" }} />
+                        <input
+                          type="range"
+                          min="0"
+                          max={duration || 0}
+                          step="0.01"
+                          value={currentTime}
+                          onChange={(e) => seekTo(e.target.value)}
+                          onPointerDown={() => { isSeekingRef.current = true; }}
+                          onPointerUp={() => {
+                            isSeekingRef.current = false;
+                            if (videoRef.current) handleTimeUpdate();
+                          }}
+                          style={{ direction: "ltr", accentColor: COLORS.yellow, width: "100%" }}
+                        />
                         <div className="controls-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, whiteSpace: "nowrap" }}>
                           <span className="desktop-time" style={{ color: COLORS.text, fontSize: 11, direction: "ltr", flexShrink: 0 }}>
                             {formatTime(currentTime)} / {formatTime(duration)}{" "}
