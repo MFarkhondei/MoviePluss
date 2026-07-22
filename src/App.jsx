@@ -1137,7 +1137,6 @@ export default function App() {
            room at the very bottom instead of touching the screen edge. */
         .movie-player:fullscreen {
           height: 100%; width: 100%; border-radius: 0;
-          display: flex; flex-direction: column;
           padding-bottom: 14px;
         }
 
@@ -1172,7 +1171,7 @@ export default function App() {
             height: 100dvh !important;
             border-radius: 0;
             flex-direction: row-reverse;
-            padding-bottom: 0;
+            padding-bottom: 0 !important;
             padding-left: env(safe-area-inset-left, 0px);
             padding-right: env(safe-area-inset-right, 0px);
           }
