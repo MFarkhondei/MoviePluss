@@ -454,10 +454,17 @@ export default function App() {
     if (nextIndex < cuesRef.current.length) jumpToCue(nextIndex, true);
   }, [jumpToCue]);
 
-  // Whenever the cards row comes to rest (whether from the arrow buttons,
-  // a swipe, or a trackpad/mouse-wheel scroll), whichever card is nearest
-  // the horizontal center should become the active/playing one.
+  // Whenever the cards row comes to rest from a genuine user gesture (a
+  // swipe, drag, or trackpad/mouse-wheel scroll), whichever card is nearest
+  // the horizontal center should become the active/playing one. We track
+  // "was this scroll actually caused by the user" separately, because
+  // programmatic scrolls — our own scrollIntoView, or the browser quietly
+  // adjusting scroll position when cards are added/removed (e.g. right
+  // after new subtitles are loaded and the current cue resets) — also
+  // fire scroll events, and reacting to those would wrongly jump playback
+  // to whatever card happens to be centered and clobber a resumed time.
   const cardsScrollTimerRef = useRef(null);
+  const userScrollingCardsRef = useRef(false);
 
   const playCenteredCard = useCallback(() => {
     const container = cardsRef.current;
@@ -481,11 +488,18 @@ export default function App() {
     }
   }, [jumpToCue]);
 
+  const markCardsUserScroll = useCallback(() => {
+    userScrollingCardsRef.current = true;
+  }, []);
+
   const onCardsScroll = useCallback(() => {
     // Debounced: wait for scrolling to actually settle before deciding
     // which card is centered, rather than reacting to every frame of motion.
     clearTimeout(cardsScrollTimerRef.current);
-    cardsScrollTimerRef.current = setTimeout(playCenteredCard, 160);
+    cardsScrollTimerRef.current = setTimeout(() => {
+      if (userScrollingCardsRef.current) playCenteredCard();
+      userScrollingCardsRef.current = false;
+    }, 160);
   }, [playCenteredCard]);
 
   useEffect(() => () => clearTimeout(cardsScrollTimerRef.current), []);
@@ -1069,7 +1083,14 @@ export default function App() {
                   </div>
                   <div className="cards-body">
                     <button className="card-side-nav next" onClick={goToNextCard} title="کارت بعدی"><ChevronRight size={24} /></button>
-                    <div ref={cardsRef} className="cards-container" onScroll={onCardsScroll}>
+                    <div
+                      ref={cardsRef}
+                      className="cards-container"
+                      onScroll={onCardsScroll}
+                      onPointerDown={markCardsUserScroll}
+                      onWheel={markCardsUserScroll}
+                      onTouchStart={markCardsUserScroll}
+                    >
                       {cues.length > 0 ? (
                         cues.map((cue, index) => {
                           const translating = !!cardTranslateLoading[index];
