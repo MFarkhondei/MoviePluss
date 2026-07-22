@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Film,
   Maximize,
   Minimize,
@@ -346,6 +348,11 @@ export default function App() {
   const suppressOutsideClickRef = useRef(false);
 
   const [cardsRatio, setCardsRatio] = useState(0.35);
+  // In mobile landscape the layout switches to video-left/cards-right, so the
+  // split becomes a width split instead of a height split — kept as its own
+  // ratio since a comfortable card-panel width is a different number than a
+  // comfortable card-panel height.
+  const [cardsRatioLandscape, setCardsRatioLandscape] = useState(0.32);
   const minCardsRatio = 0.15;
   const maxCardsRatio = 0.85;
 
@@ -410,12 +417,26 @@ export default function App() {
     return () => mql.removeEventListener("change", handler);
   }, []);
 
+  // A short, wide viewport in landscape orientation is the signature of a
+  // phone turned sideways (as opposed to a tablet/laptop in landscape,
+  // which stays comfortably tall) — that's when we switch to the
+  // video-left / cards-right side-by-side layout.
+  const [isLandscapeCards, setIsLandscapeCards] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(orientation: landscape) and (max-height: 560px)");
+    const handler = (e) => setIsLandscapeCards(e.matches);
+    handler(mql);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_SETTINGS);
       if (!raw) return;
       const s = JSON.parse(raw);
       if (typeof s?.cardsRatio === "number") setCardsRatio(Math.max(minCardsRatio, Math.min(maxCardsRatio, s.cardsRatio)));
+      if (typeof s?.cardsRatioLandscape === "number") setCardsRatioLandscape(Math.max(minCardsRatio, Math.min(maxCardsRatio, s.cardsRatioLandscape)));
       if (typeof s?.playbackRate === "number") setPlaybackRate(s.playbackRate);
       if (typeof s?.repeatOn === "boolean") setRepeatOn(s.repeatOn);
       if (typeof s?.showEnglish === "boolean") setShowEnglish(s.showEnglish);
@@ -459,11 +480,11 @@ export default function App() {
   const persistSettings = useCallback(() => {
     try {
       localStorage.setItem(STORAGE_SETTINGS, JSON.stringify({
-        cardsRatio, playbackRate, repeatOn, showEnglish, showPersian,
+        cardsRatio, cardsRatioLandscape, playbackRate, repeatOn, showEnglish, showPersian,
         brightness, subtitleSize, subtitleBottom, subtitleBackground, volume, cardFontSize,
       }));
     } catch {}
-  }, [cardsRatio, playbackRate, repeatOn, showEnglish, showPersian, brightness, subtitleSize, subtitleBottom, subtitleBackground, volume, cardFontSize]);
+  }, [cardsRatio, cardsRatioLandscape, playbackRate, repeatOn, showEnglish, showPersian, brightness, subtitleSize, subtitleBottom, subtitleBackground, volume, cardFontSize]);
 
   useEffect(() => { persistSettings(); }, [persistSettings]);
 
@@ -564,13 +585,15 @@ export default function App() {
     const container = cardsRef.current;
     if (!container) return;
     const containerRect = container.getBoundingClientRect();
-    const containerCenter = containerRect.left + containerRect.width / 2;
+    const containerCenter = isLandscapeCards
+      ? containerRect.top + containerRect.height / 2
+      : containerRect.left + containerRect.width / 2;
     const cardElements = container.querySelectorAll("[data-card]");
     let closestIndex = -1;
     let closestDistance = Infinity;
     cardElements.forEach((el) => {
       const rect = el.getBoundingClientRect();
-      const cardCenter = rect.left + rect.width / 2;
+      const cardCenter = isLandscapeCards ? rect.top + rect.height / 2 : rect.left + rect.width / 2;
       const distance = Math.abs(cardCenter - containerCenter);
       if (distance < closestDistance) {
         closestDistance = distance;
@@ -580,7 +603,7 @@ export default function App() {
     if (closestIndex !== -1 && closestIndex !== currentCueRef.current) {
       jumpToCue(closestIndex, true);
     }
-  }, [jumpToCue]);
+  }, [jumpToCue, isLandscapeCards]);
 
   const markCardsUserScroll = useCallback(() => {
     userScrollingCardsRef.current = true;
@@ -846,34 +869,43 @@ export default function App() {
     showControlsTemporarily();
   }, [playbackRate, showControlsTemporarily]);
 
-  const dragStateRef = useRef({ dragging: false, startClientY: 0, startCardsRatio: 0, totalHeight: 1 });
+  const dragStateRef = useRef({ dragging: false, axis: "y", startPos: 0, startRatio: 0, totalSize: 1 });
 
   const onStartDrag = useCallback((e) => {
     const playerEl = playerRef.current;
     if (!playerEl) return;
     // Measure the whole player (video + handle + cards) so the ratio math
-    // is correct in every layout mode (windowed, fullscreen, mobile),
-    // and subtract the handle's own height since it doesn't grow/shrink.
-    const totalPlayerHeight = playerEl.getBoundingClientRect().height || 1;
-    const handleHeight = splitHandleRef.current?.getBoundingClientRect().height || 10;
-    const totalH = Math.max(1, totalPlayerHeight - handleHeight);
-    dragStateRef.current.dragging = true;
-    dragStateRef.current.startClientY = e.clientY;
-    dragStateRef.current.startCardsRatio = cardsRatio;
-    dragStateRef.current.totalHeight = totalH;
+    // is correct in every layout mode (windowed, fullscreen, mobile), and
+    // subtract the handle's own thickness since it doesn't grow/shrink.
+    // In the normal/portrait layout the split is vertical (height); in
+    // mobile landscape (video left, cards right) it's horizontal (width).
+    const axis = isLandscapeCards ? "x" : "y";
+    const playerRect = playerEl.getBoundingClientRect();
+    const handleRect = splitHandleRef.current?.getBoundingClientRect();
+    const totalSize = axis === "x"
+      ? Math.max(1, playerRect.width - (handleRect?.width || 10))
+      : Math.max(1, playerRect.height - (handleRect?.height || 10));
+    dragStateRef.current = {
+      dragging: true,
+      axis,
+      startPos: axis === "x" ? e.clientX : e.clientY,
+      startRatio: axis === "x" ? cardsRatioLandscape : cardsRatio,
+      totalSize,
+    };
     e.preventDefault();
     e.stopPropagation();
-  }, [cardsRatio]);
+  }, [cardsRatio, cardsRatioLandscape, isLandscapeCards]);
 
   useEffect(() => {
     const onMove = (e) => {
-      if (!dragStateRef.current.dragging) return;
-      const { totalHeight, startClientY, startCardsRatio } = dragStateRef.current;
-      const dy = e.clientY - startClientY;
-      const deltaRatio = dy / totalHeight;
-      let next = startCardsRatio - deltaRatio; // Drag up makes cards bigger
+      const state = dragStateRef.current;
+      if (!state.dragging) return;
+      const pos = state.axis === "x" ? e.clientX : e.clientY;
+      const delta = (pos - state.startPos) / state.totalSize;
+      let next = state.startRatio - delta; // Drag toward the video makes the cards panel bigger
       next = Math.max(minCardsRatio, Math.min(maxCardsRatio, next));
-      setCardsRatio(next);
+      if (state.axis === "x") setCardsRatioLandscape(next);
+      else setCardsRatio(next);
     };
     const onUp = () => { dragStateRef.current.dragging = false; };
     window.addEventListener("pointermove", onMove, { passive: false });
@@ -1001,11 +1033,17 @@ export default function App() {
     if (currentCue < 0 || !cardsRef.current) return;
     const cardElement = cardsRef.current.querySelector(`[data-card="${currentCue}"]`);
     if (!cardElement) return;
-    cardElement.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }, [currentCue]);
+    cardElement.scrollIntoView({
+      behavior: "smooth",
+      inline: isLandscapeCards ? "nearest" : "center",
+      block: isLandscapeCards ? "center" : "nearest",
+    });
+  }, [currentCue, isLandscapeCards]);
 
   const videoBasis = useMemo(() => `${(100 - (cardsRatio * 100)).toFixed(2)}%`, [cardsRatio]);
   const cardsBasis = useMemo(() => `${(cardsRatio * 100).toFixed(2)}%`, [cardsRatio]);
+  const videoBasisLandscape = useMemo(() => `${(100 - (cardsRatioLandscape * 100)).toFixed(2)}%`, [cardsRatioLandscape]);
+  const cardsBasisLandscape = useMemo(() => `${(cardsRatioLandscape * 100).toFixed(2)}%`, [cardsRatioLandscape]);
 
   return (
     <div dir="rtl" className="movie-pluss" style={{ fontFamily: "Vazirmatn, sans-serif", color: COLORS.text }}>
@@ -1104,7 +1142,7 @@ export default function App() {
         }
 
         /* Mobile specific styles */
-        @media (max-width: 767px) {
+        @media (max-width: 767px) and (orientation: portrait) {
           .upload-section { grid-template-columns: 1fr !important; }
           .movie-player {
             height: 100dvh !important;
@@ -1122,6 +1160,50 @@ export default function App() {
           .player-controls .right-controls { gap: 6px !important; }
           .player-controls .right-controls button { width: 32px !important; height: 32px !important; min-width: 32px !important; }
           .settings-popup { left: 6px; right: 6px; width: auto; max-width: none; }
+        }
+
+        /* Mobile landscape: a short, wide viewport means the phone is on
+           its side. Switch to video on the left, cards on the right (a
+           column of cards instead of a row), with the "next" button below
+           the list and "previous" above it, and let the split handle drag
+           the WIDTH of the cards panel instead of its height. */
+        @media (orientation: landscape) and (max-height: 560px) {
+          .movie-player {
+            height: 100dvh !important;
+            border-radius: 0;
+            flex-direction: row-reverse;
+            padding-bottom: 0;
+            padding-left: env(safe-area-inset-left, 0px);
+            padding-right: env(safe-area-inset-right, 0px);
+          }
+          .video-section { flex: 1 1 ${videoBasisLandscape}; }
+          .cards-section {
+            flex: 0 0 ${cardsBasisLandscape};
+            border-top-width: 0;
+            border-right: 1px solid ${COLORS.border};
+            padding-bottom: 0;
+          }
+          .split-handle {
+            flex-basis: 12px; width: 12px; height: auto;
+            cursor: ew-resize;
+          }
+          .cards-body { flex-direction: column-reverse; }
+          .card-side-nav {
+            flex-basis: 36px; width: 100%; height: 36px;
+            border-right: none; border-left: none;
+          }
+          .card-side-nav.prev { border-bottom: 1px solid rgba(255,255,255,0.05); }
+          .card-side-nav.next { border-top: 1px solid rgba(255,255,255,0.05); }
+          .card-side-nav::before { background: linear-gradient(to right, rgba(255,255,255,0.02), rgba(255,255,255,0.04), rgba(255,255,255,0.02)); }
+          .cards-container {
+            flex-direction: column;
+            gap: 8px;
+            padding: 160px 10px;
+            overflow-x: hidden; overflow-y: auto;
+            scroll-snap-type: y proximity;
+          }
+          .subtitle-card { min-width: 0 !important; max-width: none !important; width: 100%; }
+          .settings-popup { max-height: calc(100% - 16px); }
         }
       `}</style>
 
@@ -1198,7 +1280,7 @@ export default function App() {
         </section>
       )}
 
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "0" : "20px" }}>
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: (isMobile || isLandscapeCards) ? "0" : "20px" }}>
         <div
           ref={playerRef}
           className="movie-player"
@@ -1314,7 +1396,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div ref={splitHandleRef} className="split-handle" onPointerDown={onStartDrag} title="تغییر ارتفاع" />
+                <div ref={splitHandleRef} className="split-handle" onPointerDown={onStartDrag} title={isLandscapeCards ? "تغییر عرض" : "تغییر ارتفاع"} />
 
                 <section className="cards-section">
                   <div className="cards-header">
@@ -1322,7 +1404,9 @@ export default function App() {
                     <span>کارت {currentCue >= 0 ? currentCue + 1 : "-"}</span>
                   </div>
                   <div className="cards-body">
-                    <button className="card-side-nav next" onClick={goToNextCard} title="کارت بعدی"><ChevronRight size={24} /></button>
+                    <button className="card-side-nav next" onClick={goToNextCard} title="کارت بعدی">
+                      {isLandscapeCards ? <ChevronDown size={22} /> : <ChevronRight size={24} />}
+                    </button>
                     <div
                       ref={cardsRef}
                       className="cards-container"
@@ -1372,7 +1456,9 @@ export default function App() {
                         <div style={{ padding: 18, color: COLORS.muted, fontSize: 13 }}>با انتخاب زیرنویس‌ها، کارت‌ها نمایش داده می‌شوند.</div>
                       )}
                     </div>
-                    <button className="card-side-nav prev" onClick={goToPreviousCard} title="کارت قبلی"><ChevronLeft size={24} /></button>
+                    <button className="card-side-nav prev" onClick={goToPreviousCard} title="کارت قبلی">
+                      {isLandscapeCards ? <ChevronUp size={22} /> : <ChevronLeft size={24} />}
+                    </button>
                   </div>
                 </section>
               </>
