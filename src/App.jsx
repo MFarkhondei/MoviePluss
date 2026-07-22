@@ -33,6 +33,13 @@ const ENCODINGS = [
   { value: "windows-1252", label: "Windows-1252" },
 ];
 
+// The File System Access API (showOpenFilePicker) is only available in
+// Chromium-based browsers (Chrome, Edge). Everywhere else we fall back to
+// a normal <input type="file"> — it still works fine, it just can't be
+// silently re-opened next launch since a plain file input never gives us
+// a re-usable handle to the file, only a one-time snapshot of its bytes.
+const supportsFileHandles = typeof window !== "undefined" && "showOpenFilePicker" in window;
+
 function timeToSeconds(value = "") {
   const parts = value.trim().replace(",", ".").split(":").map(Number);
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
@@ -194,7 +201,7 @@ function SettingRange({ label, value, min, max, onChange, step = 1 }) {
   );
 }
 
-function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) {
+function SubtitleInput({ language, file, encoding, color, onFile, onEncoding, onPick }) {
   const label = language === "en" ? "زیرنویس انگلیسی" : "زیرنویس فارسی";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -212,6 +219,12 @@ function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) 
           cursor: "pointer",
           fontFamily: "'Vazirmatn', sans-serif",
           minHeight: 42,
+        }}
+        onClick={(event) => {
+          if (supportsFileHandles && onPick) {
+            event.preventDefault();
+            onPick(language);
+          }
         }}
       >
         <Subtitles size={15} color={color} />
@@ -240,6 +253,82 @@ function SubtitleInput({ language, file, encoding, color, onFile, onEncoding }) 
 
 const STORAGE_LAST_TIME_PREFIX = "moviepluss:lastTime:";
 const STORAGE_SETTINGS = "moviepluss:lastSettings:v2";
+const STORAGE_LAST_META = "moviepluss:lastFilesMeta";
+
+// Copying whole video files into browser storage doesn't scale, so instead
+// we keep a lightweight File System Access "handle" (a re-openable reference
+// to the actual file on disk, not a copy of its bytes) in IndexedDB. Next
+// launch, if the browser still remembers the read permission, the handle is
+// used to silently re-open the same file — which then resumes at the saved
+// last-time as usual. This only works in browsers that support the File
+// System Access API (Chrome/Edge); others fall back to a normal file picker
+// with no auto-restore.
+const IDB_NAME = "moviepluss-db";
+const IDB_STORE = "lastSession";
+
+function openLastSessionDb() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") { reject(new Error("no-indexeddb")); return; }
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbSetValue(key, value) {
+  try {
+    const db = await openLastSessionDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // Storage full, private-browsing mode, or IndexedDB unavailable — the
+    // app still works fine, it just won't auto-restore next time.
+  }
+}
+
+async function idbGetValue(key) {
+  try {
+    const db = await openLastSessionDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function idbClearLastSession() {
+  try {
+    const db = await openLastSessionDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).clear();
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {}
+}
+
+function readLastFilesMeta() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_LAST_META) || "{}"); } catch { return {}; }
+}
+
+function writeLastFilesMeta(partial) {
+  try {
+    const current = readLastFilesMeta();
+    localStorage.setItem(STORAGE_LAST_META, JSON.stringify({ ...current, ...partial }));
+  } catch {}
+}
 
 export default function App() {
   const videoRef = useRef(null);
@@ -262,6 +351,11 @@ export default function App() {
 
   const [videoUrl, setVideoUrl] = useState("");
   const [videoName, setVideoName] = useState("");
+  // When a saved file handle exists but the browser needs a fresh user
+  // click before it'll re-grant read access, this holds what's waiting to
+  // be resumed so we can show a one-click "resume" prompt instead of
+  // silently failing (or forcing a full re-pick through the file dialog).
+  const [restorePrompt, setRestorePrompt] = useState(null);
 
   const [englishFile, setEnglishFile] = useState(null);
   const [persianFile, setPersianFile] = useState(null);
@@ -604,10 +698,12 @@ export default function App() {
       setEnglishFile(file);
       setEnglishEncoding(result.encoding);
       setEnglishText(result.text);
+      writeLastFilesMeta({ enEncoding: result.encoding });
     } else {
       setPersianFile(file);
       setPersianEncoding(result.encoding);
       setPersianText(result.text);
+      writeLastFilesMeta({ faEncoding: result.encoding });
     }
   };
 
@@ -615,9 +711,11 @@ export default function App() {
     if (language === "en") {
       setEnglishEncoding(encoding);
       if (englishFile) setEnglishText(await decodeFile(englishFile, encoding));
+      writeLastFilesMeta({ enEncoding: encoding });
     } else {
       setPersianEncoding(encoding);
       if (persianFile) setPersianText(await decodeFile(persianFile, encoding));
+      writeLastFilesMeta({ faEncoding: encoding });
     }
   };
 
@@ -627,6 +725,106 @@ export default function App() {
       else await playerRef.current?.requestFullscreen();
     } catch (error) { console.error(error); }
   };
+
+  // Opens the native "capability" file picker (instead of <input type=file>)
+  // so we get back a re-openable handle, not just a one-time snapshot of the
+  // file's bytes — that handle is what lets the app find the same file again
+  // next launch without asking the user to browse for it a second time.
+  const pickVideoFile = useCallback(async () => {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        multiple: false,
+        types: [{ description: "ویدیو", accept: { "video/*": [".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi"] } }],
+      });
+      const file = await handle.getFile();
+      handleVideoFile(file);
+      idbSetValue("videoHandle", handle);
+    } catch (err) {
+      // AbortError just means the user closed the picker — nothing to do.
+    }
+  }, [handleVideoFile]);
+
+  const pickSubtitleFile = useCallback(async (language) => {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        multiple: false,
+        types: [{ description: "زیرنویس", accept: { "text/plain": [".srt", ".vtt", ".txt"] } }],
+      });
+      const file = await handle.getFile();
+      await handleSubtitleFile(file, language);
+      idbSetValue(language === "en" ? "subtitleEnHandle" : "subtitleFaHandle", handle);
+    } catch (err) {
+      // AbortError just means the user closed the picker — nothing to do.
+    }
+  }, [handleSubtitleFile]);
+
+  // On launch: look for handles saved from last time. Browsers only let a
+  // saved handle be silently re-used if they still remember granting read
+  // permission — that's checked with queryPermission (silent, no prompt).
+  // If permission isn't remembered, requestPermission would re-ask, but
+  // browsers require a real user click for that; it cannot happen quietly
+  // on page load. So anything that can't be silently restored is queued
+  // into restorePrompt for a single "resume" click instead of a full
+  // file-picker round trip.
+  useEffect(() => {
+    if (!supportsFileHandles) return;
+    let cancelled = false;
+    (async () => {
+      const [videoHandle, enHandle, faHandle] = await Promise.all([
+        idbGetValue("videoHandle"),
+        idbGetValue("subtitleEnHandle"),
+        idbGetValue("subtitleFaHandle"),
+      ]);
+      if (cancelled || (!videoHandle && !enHandle && !faHandle)) return;
+
+      const tryAutoLoad = async (handle, kind) => {
+        if (!handle) return true; // nothing saved for this slot — not "pending"
+        try {
+          const perm = await handle.queryPermission({ mode: "read" });
+          if (perm !== "granted") return false;
+          const file = await handle.getFile();
+          if (kind === "video") handleVideoFile(file);
+          else await handleSubtitleFile(file, kind);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      const [videoOk, enOk, faOk] = await Promise.all([
+        tryAutoLoad(videoHandle, "video"),
+        tryAutoLoad(enHandle, "en"),
+        tryAutoLoad(faHandle, "fa"),
+      ]);
+      if (cancelled) return;
+
+      const pending = {};
+      if (videoHandle && !videoOk) pending.video = videoHandle;
+      if (enHandle && !enOk) pending.subtitleEn = enHandle;
+      if (faHandle && !faOk) pending.subtitleFa = faHandle;
+      if (Object.keys(pending).length > 0) setRestorePrompt(pending);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const resumeFromRestorePrompt = useCallback(async () => {
+    if (!restorePrompt) return;
+    const entries = Object.entries(restorePrompt);
+    for (const [kind, handle] of entries) {
+      try {
+        const perm = await handle.requestPermission({ mode: "read" });
+        if (perm !== "granted") continue;
+        const file = await handle.getFile();
+        if (kind === "video") handleVideoFile(file);
+        else if (kind === "subtitleEn") await handleSubtitleFile(file, "en");
+        else if (kind === "subtitleFa") await handleSubtitleFile(file, "fa");
+      } catch {
+        // ignore — user may have moved/deleted the file, or declined access
+      }
+    }
+    setRestorePrompt(null);
+  }, [restorePrompt, handleVideoFile, handleSubtitleFile]);
 
   const onVideoPointerDown = useCallback((e) => {
     if (!videoRef.current) return;
@@ -951,15 +1149,51 @@ export default function App() {
         </button>
       </header>
 
+      {restorePrompt && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            padding: "12px 20px",
+            background: COLORS.panel,
+            borderBottom: `1px solid ${COLORS.border}`,
+            color: COLORS.text,
+            fontSize: 12,
+          }}
+        >
+          <span>فیلم/زیرنویس قبلی پیدا شد؛ مرورگر برای دسترسی دوباره به یک کلیک نیاز داره.</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={resumeFromRestorePrompt} style={buttonStyle()}>ازسرگیری</button>
+            <button
+              onClick={() => { idbClearLastSession(); setRestorePrompt(null); }}
+              style={{ ...buttonStyle(), background: "transparent" }}
+            >
+              فراموش کن
+            </button>
+          </div>
+        </div>
+      )}
+
       {filesOpen && (
         <section className="upload-section">
-          <label style={uploadBoxStyle()}>
+          <label
+            style={uploadBoxStyle()}
+            onClick={(event) => {
+              if (supportsFileHandles) {
+                event.preventDefault();
+                pickVideoFile();
+              }
+            }}
+          >
             <Film size={18} color={COLORS.yellow} />
             {videoName || "انتخاب فایل ویدیو"}
             <input type="file" accept="video/*" onChange={(event) => handleVideoFile(event.target.files?.[0])} style={{ display: "none" }} />
           </label>
-          <SubtitleInput language="en" file={englishFile} encoding={englishEncoding} color={COLORS.yellow} onFile={handleSubtitleFile} onEncoding={changeSubtitleEncoding} />
-          <SubtitleInput language="fa" file={persianFile} encoding={persianEncoding} color={COLORS.teal} onFile={handleSubtitleFile} onEncoding={changeSubtitleEncoding} />
+          <SubtitleInput language="en" file={englishFile} encoding={englishEncoding} color={COLORS.yellow} onFile={handleSubtitleFile} onEncoding={changeSubtitleEncoding} onPick={pickSubtitleFile} />
+          <SubtitleInput language="fa" file={persianFile} encoding={persianEncoding} color={COLORS.teal} onFile={handleSubtitleFile} onEncoding={changeSubtitleEncoding} onPick={pickSubtitleFile} />
           <div className="hint">به محض انتخاب زیرنویس‌ها، کارت‌ها فعال می‌شوند</div>
         </section>
       )}
@@ -983,6 +1217,12 @@ export default function App() {
                   gap: 12,
                   color: COLORS.muted,
                   cursor: "pointer",
+                }}
+                onClick={(event) => {
+                  if (supportsFileHandles) {
+                    event.preventDefault();
+                    pickVideoFile();
+                  }
                 }}
               >
                 <Play size={50} color={COLORS.yellow} />
