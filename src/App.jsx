@@ -474,10 +474,29 @@ export default function App() {
   }, [videoName]);
 
   useEffect(() => {
-    const beforeUnload = () => saveCurrentTime();
-    window.addEventListener("beforeunload", beforeUnload);
-    return () => window.removeEventListener("beforeunload", beforeUnload);
+    const handleSave = () => saveCurrentTime();
+    const handleVisibility = () => { if (document.visibilityState === "hidden") saveCurrentTime(); };
+    // beforeunload alone misses most real-world mobile cases: phones tend to
+    // just suspend or kill a backgrounded tab instead of firing it. pagehide
+    // and visibilitychange both fire reliably when a tab is backgrounded or
+    // closed on mobile, so all three are covered here.
+    window.addEventListener("beforeunload", handleSave);
+    window.addEventListener("pagehide", handleSave);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("beforeunload", handleSave);
+      window.removeEventListener("pagehide", handleSave);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [saveCurrentTime]);
+
+  useEffect(() => {
+    // Safety net: even if the app is force-closed with no warning at all,
+    // this caps how much progress could ever be lost.
+    if (!isPlaying) return;
+    const interval = setInterval(saveCurrentTime, 5000);
+    return () => clearInterval(interval);
+  }, [isPlaying, saveCurrentTime]);
 
   const persistSettings = useCallback(() => {
     try {
@@ -660,6 +679,20 @@ export default function App() {
     }
   };
 
+  // Finds which cue a given video time falls into and makes it "current" —
+  // shared by manual seeks and by the resume-on-load logic below, so
+  // restoring the saved time also restores which card was active, instead
+  // of leaving it unset until playback happens to reach a cue boundary.
+  const syncCueForTime = useCallback((time) => {
+    const list = cuesRef.current;
+    if (!list.length) return;
+    const idx = list.findIndex((cue) => time >= cue.start && time < cue.end);
+    if (idx !== -1) {
+      currentCueRef.current = idx;
+      setCurrentCue(idx);
+    }
+  }, []);
+
   const handleVideoLoaded = () => {
     if (!videoRef.current) return;
     setDuration(videoRef.current.duration || 0);
@@ -674,9 +707,20 @@ export default function App() {
         const safeT = Math.min(t, videoRef.current.duration || t);
         videoRef.current.currentTime = safeT;
         setCurrentTime(safeT);
+        syncCueForTime(safeT);
       }
     }
   };
+
+  // Covers the reverse order too: if subtitles finish loading (and cues
+  // become available) AFTER the video's saved time was already restored —
+  // e.g. during the auto-restore-on-launch flow, where the video file and
+  // subtitle files resolve independently and can finish in either order.
+  useEffect(() => {
+    if (currentCueRef.current !== -1) return;
+    const time = videoRef.current?.currentTime;
+    if (time) syncCueForTime(time);
+  }, [cues, syncCueForTime]);
 
   const handleVideoFile = (file) => {
     if (!file) return;
@@ -1214,7 +1258,9 @@ export default function App() {
             flex-basis: 12px; width: 12px; height: auto;
             cursor: ew-resize;
           }
-          .cards-body { flex-direction: column-reverse; }
+          .cards-body { flex-direction: column; }
+          .card-side-nav.prev { order: -1; }
+          .card-side-nav.next { order: 1; }
           .card-side-nav {
             flex: 0 0 44px; width: calc(100% - 20px); height: 44px;
             margin: 10px;
