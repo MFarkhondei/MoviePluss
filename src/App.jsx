@@ -1262,8 +1262,8 @@ export default function App() {
           .card-side-nav.prev { order: -1; }
           .card-side-nav.next { order: 1; }
           .card-side-nav {
-            flex: 0 0 44px; width: calc(100% - 20px); height: 44px;
-            margin: 10px;
+            flex: 0 0 44px; flex-shrink: 0; width: calc(100% - 16px); height: 44px;
+            margin: 8px;
             border-radius: 10px;
             background: ${COLORS.card};
           }
@@ -1273,7 +1273,7 @@ export default function App() {
             flex-direction: column;
             min-height: 0;
             gap: 8px;
-            padding: 160px 10px;
+            padding: 60px 10px;
             overflow-x: hidden; overflow-y: auto;
             scroll-snap-type: y proximity;
           }
