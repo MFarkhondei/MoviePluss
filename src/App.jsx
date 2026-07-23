@@ -676,13 +676,16 @@ export default function App() {
         const limit = repeatCountRef.current;
         if (limit > 0) {
           repeatProgressRef.current += 1;
+          // Reveal the translation one repeat before the last, so the
+          // final repeat plays with it already visible, then advance.
+          if (repeatProgressRef.current === Math.max(1, limit - 1)) {
+            translateCardToPersian(index);
+          }
           if (repeatProgressRef.current < limit) {
             videoRef.current.currentTime = current.start;
             return;
           }
-          // Final repeat reached — reveal the translation, then move on.
           repeatProgressRef.current = 0;
-          translateCardToPersian(index);
           if (next) {
             jumpToCue(index + 1, true);
             return;
