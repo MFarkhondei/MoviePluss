@@ -528,8 +528,8 @@ export default function App() {
 
   const playVideo = useCallback(async () => {
     if (!videoRef.current) return;
-    try { await videoRef.current.play(); setIsPlaying(true); showControlsTemporarily(); } catch { setIsPlaying(false); }
-  }, [showControlsTemporarily]);
+    try { await videoRef.current.play(); setIsPlaying(true); } catch { setIsPlaying(false); }
+  }, []);
 
   const pauseVideo = useCallback(() => {
     if (!videoRef.current) return;
@@ -541,8 +541,9 @@ export default function App() {
 
   const togglePlay = useCallback(() => {
     if (!videoRef.current) return;
+    showControlsTemporarily();
     videoRef.current.paused ? playVideo() : pauseVideo();
-  }, [playVideo, pauseVideo]);
+  }, [playVideo, pauseVideo, showControlsTemporarily]);
 
   const seekBy = useCallback((seconds) => {
     if (!videoRef.current) return;
@@ -1385,9 +1386,6 @@ export default function App() {
         <div
           ref={playerRef}
           className="movie-player"
-          onMouseMove={showControlsTemporarily}
-          onMouseEnter={() => setControlsVisible(true)}
-          onMouseLeave={() => setControlsVisible(false)}
         >
             {!videoUrl ? (
               <label
@@ -1415,13 +1413,18 @@ export default function App() {
             ) : (
               <>
                 <div className="video-section">
-                  <div className="video-stage">
+                  <div
+                    className="video-stage"
+                    onMouseMove={showControlsTemporarily}
+                    onMouseEnter={() => setControlsVisible(true)}
+                    onMouseLeave={() => setControlsVisible(false)}
+                  >
                     <video
                       ref={videoRef}
                       src={videoUrl}
                       onLoadedMetadata={handleVideoLoaded}
                       onTimeUpdate={handleTimeUpdate}
-                      onPlay={() => { setIsPlaying(true); setControlsVisible(true); }}
+                      onPlay={() => setIsPlaying(true)}
                       onPause={() => { setIsPlaying(false); setControlsVisible(true); saveCurrentTime(); }}
                       onDoubleClick={toggleFullscreen}
                       onClick={togglePlay}
