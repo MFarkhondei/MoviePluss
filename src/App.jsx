@@ -345,7 +345,6 @@ export default function App() {
   const translationCacheRef = useRef({});
   const translationWordCacheRef = useRef({});
   const hideControlsTimerRef = useRef(null);
-  const suppressOutsideClickRef = useRef(false);
 
   const [cardsRatio, setCardsRatio] = useState(0.35);
   // In mobile landscape the layout switches to video-left/cards-right, so the
@@ -399,7 +398,10 @@ export default function App() {
   const [subtitleBackground, setSubtitleBackground] = useState(true);
 
   const [cardFontSize, setCardFontSize] = useState(12);
-  const [wordPopup, setWordPopup] = useState(null);
+  // { word, text, loading, top, left } — top/left are viewport coordinates
+  // (from the hovered word's own bounding box), so one tooltip works for
+  // words anywhere: in a card, or in the subtitle overlaid on the video.
+  const [wordTooltip, setWordTooltip] = useState(null);
   const [cardTranslateLoading, setCardTranslateLoading] = useState({});
 
   const activeCue = currentCue >= 0 ? cuesRef.current[currentCue] : null;
@@ -545,7 +547,7 @@ export default function App() {
     const detectedIndex = list.findIndex((cue) => nextTime >= cue.start && nextTime < cue.end);
     currentCueRef.current = detectedIndex;
     setCurrentCue(detectedIndex);
-    setWordPopup(null);
+    setWordTooltip(null);
   };
 
   const jumpToCue = useCallback((index, autoplay = true) => {
@@ -553,7 +555,7 @@ export default function App() {
     if (!cue || !videoRef.current) return;
     currentCueRef.current = index;
     setCurrentCue(index);
-    setWordPopup(null);
+    setWordTooltip(null);
     videoRef.current.currentTime = cue.start;
     if (autoplay) playVideo();
   }, [playVideo]);
@@ -687,7 +689,7 @@ export default function App() {
     setCurrentCue(-1);
     currentCueRef.current = -1;
     setIsPlaying(false);
-    setWordPopup(null);
+    setWordTooltip(null);
 
     if (englishText || persianText) {
       const merged = mergeSubtitles(englishText || "", persianText || "");
@@ -918,9 +920,8 @@ export default function App() {
 
   useEffect(() => {
     const onDocClick = (e) => {
-      if (suppressOutsideClickRef.current) return;
-      if (e.target.closest?.(".word-popup") || e.target.closest?.("[data-word-token='1']")) return;
-      setWordPopup(null);
+      if (e.target.closest?.("[data-word-token='1']")) return;
+      setWordTooltip(null);
     };
     document.addEventListener("click", onDocClick, true);
     return () => document.removeEventListener("click", onDocClick, true);
@@ -938,23 +939,37 @@ export default function App() {
     return faText;
   }, []);
 
-  const translateWordPopup = useCallback(async (word, cardIndex) => {
-    if (!word || cardIndex === undefined || cardIndex === null) return;
-    const clean = word.trim();
-    if (!clean) return;
-    setWordPopup({ cardIndex, word: clean, text: "ترجمه...", loading: true });
-    try {
-      const cacheKey = `word:${clean.toLowerCase()}`;
-      if (translationWordCacheRef.current[cacheKey]) {
-        setWordPopup({ cardIndex, word: clean, text: translationWordCacheRef.current[cacheKey], loading: false });
-        return;
-      }
-      const fa = await fetchWordTranslation(clean);
-      setWordPopup({ cardIndex, word: clean, text: fa, loading: false });
-    } catch {
-      setWordPopup({ cardIndex, word: clean, text: "خطا در دریافت ترجمه", loading: false });
+  const wordTooltipHideTimerRef = useRef(null);
+
+  // Shows the tooltip right above whatever word triggered it (rect comes
+  // from that word span's own getBoundingClientRect), fed by hover — with
+  // a click fallback for touch, since touch devices don't have hover.
+  const showWordTooltip = useCallback((word, rect) => {
+    const clean = (word || "").trim();
+    if (!clean || !rect) return;
+    clearTimeout(wordTooltipHideTimerRef.current);
+    const top = rect.top;
+    const left = rect.left + rect.width / 2;
+    setWordTooltip({ word: clean, text: "ترجمه...", loading: true, top, left });
+    const cacheKey = `word:${clean.toLowerCase()}`;
+    if (translationWordCacheRef.current[cacheKey]) {
+      setWordTooltip((prev) => (prev && prev.word === clean ? { ...prev, text: translationWordCacheRef.current[cacheKey], loading: false } : prev));
+      return;
     }
+    fetchWordTranslation(clean)
+      .then((fa) => setWordTooltip((prev) => (prev && prev.word === clean ? { ...prev, text: fa, loading: false } : prev)))
+      .catch(() => setWordTooltip((prev) => (prev && prev.word === clean ? { ...prev, text: "خطا در دریافت ترجمه", loading: false } : prev)));
   }, [fetchWordTranslation]);
+
+  const hideWordTooltip = useCallback((immediate = false) => {
+    clearTimeout(wordTooltipHideTimerRef.current);
+    if (immediate) { setWordTooltip(null); return; }
+    // A short delay avoids flicker when the mouse briefly passes between
+    // two adjacent words.
+    wordTooltipHideTimerRef.current = setTimeout(() => setWordTooltip(null), 100);
+  }, []);
+
+  useEffect(() => () => clearTimeout(wordTooltipHideTimerRef.current), []);
 
   const translateCardToPersian = async (cueIndex) => {
     const cue = cuesRef.current[cueIndex];
@@ -984,7 +999,7 @@ export default function App() {
     }
   };
 
-  const renderEnglish = (text, prefix, cardIndex) => {
+  const renderEnglish = (text, prefix) => {
     return text.split(/(\s+)/).map((token, index) => {
       if (/^\s+$/.test(token)) return token;
       const isWord = /^[A-Za-z]+(?:'[A-Za-z]+)?$/.test(token) || /^[A-Za-z]+$/.test(token);
@@ -995,13 +1010,13 @@ export default function App() {
             key={`${prefix}-${index}`}
             data-word-token="1"
             style={{ borderBottom: `1px dotted ${COLORS.yellow}`, cursor: "pointer", color: COLORS.yellow, fontWeight: 700, userSelect: "none" }}
+            onMouseEnter={(e) => showWordTooltip(token, e.currentTarget.getBoundingClientRect())}
+            onMouseLeave={() => hideWordTooltip()}
             onClick={(e) => {
+              // Touch devices don't fire hover — a tap shows the same tooltip.
               e.preventDefault();
               e.stopPropagation();
-              suppressOutsideClickRef.current = true;
-              setWordPopup({ cardIndex, word: String(token), text: "ترجمه...", loading: true });
-              translateWordPopup(token, cardIndex);
-              setTimeout(() => { suppressOutsideClickRef.current = false; }, 120);
+              showWordTooltip(token, e.currentTarget.getBoundingClientRect());
             }}
           >
             {token}
@@ -1123,9 +1138,22 @@ export default function App() {
 
         .settings-popup { position: absolute; top: 14px; left: 14px; z-index: 90; width: 260px; max-height: calc(100% - 28px); overflow-y: auto; padding: 14px; border: 1px solid ${COLORS.border}; border-radius: 10px; background: rgba(20,23,31,.97); }
 
-        .word-popup { position: absolute; z-index: 300; top: -10px; left: 0; right: 0; margin: 0 auto; width: calc(100% - 18px); max-width: 320px; background: rgba(20,23,31,.97); border: 1px solid ${COLORS.border}; border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.5); padding: 10px 12px; transform: translateY(-100%); direction: rtl; user-select: none; }
-        .word-popup-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
-        .word-popup-close { width: 28px; height: 28px; border-radius: 8px; border: 1px solid ${COLORS.border}; background: rgba(0,0,0,.25); color: ${COLORS.text}; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .word-tooltip {
+          position: fixed; z-index: 500;
+          transform: translate(-50%, calc(-100% - 10px));
+          background: rgba(20,23,31,.97);
+          border: 1px solid ${COLORS.border};
+          border-radius: 10px;
+          padding: 6px 12px;
+          color: ${COLORS.teal};
+          font-size: 13px; font-weight: 800; line-height: 1.5;
+          max-width: 240px; white-space: normal; word-break: break-word;
+          text-align: center;
+          box-shadow: 0 10px 30px rgba(0,0,0,.5);
+          direction: rtl;
+          pointer-events: none;
+          user-select: none;
+        }
 
         .upload-section { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 14px; padding: 20px; background: ${COLORS.panel}; border-bottom: 1px solid ${COLORS.border}; }
         .upload-section > * { min-height: 42px; }
@@ -1188,14 +1216,16 @@ export default function App() {
           }
           .cards-body { flex-direction: column-reverse; }
           .card-side-nav {
-            flex-basis: 36px; width: 100%; height: 36px;
-            border-right: none; border-left: none;
+            flex: 0 0 44px; width: calc(100% - 20px); height: 44px;
+            margin: 10px;
+            border-radius: 10px;
+            background: ${COLORS.card};
           }
-          .card-side-nav.prev { border-bottom: 1px solid rgba(255,255,255,0.05); }
-          .card-side-nav.next { border-top: 1px solid rgba(255,255,255,0.05); }
-          .card-side-nav::before { background: linear-gradient(to right, rgba(255,255,255,0.02), rgba(255,255,255,0.04), rgba(255,255,255,0.02)); }
+          .card-side-nav.prev, .card-side-nav.next { border: 1px solid ${COLORS.border}; }
+          .card-side-nav::before { display: none; }
           .cards-container {
             flex-direction: column;
+            min-height: 0;
             gap: 8px;
             padding: 160px 10px;
             overflow-x: hidden; overflow-y: auto;
@@ -1388,7 +1418,7 @@ export default function App() {
 
                     {activeCue && (
                       <div style={{ position: "absolute", right: 0, bottom: subtitleBottom, left: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "0 18px", pointerEvents: "none", zIndex: 1000 }}>
-                        {showEnglish && activeCue.en && <div style={{ maxWidth: "92%", padding: subtitleBackground ? "5px 12px" : "2px 4px", borderRadius: 6, background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent", color: COLORS.yellow, fontSize: 17 * (subtitleSize / 100), fontWeight: 700, textAlign: "center", direction: "ltr", pointerEvents: "auto" }}>{renderEnglish(activeCue.en, "overlay", -1)}</div>}
+                        {showEnglish && activeCue.en && <div style={{ maxWidth: "92%", padding: subtitleBackground ? "5px 12px" : "2px 4px", borderRadius: 6, background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent", color: COLORS.yellow, fontSize: 17 * (subtitleSize / 100), fontWeight: 700, textAlign: "center", direction: "ltr", pointerEvents: "auto" }}>{renderEnglish(activeCue.en, "overlay")}</div>}
                         {showPersian && activeCue.fa && <div style={{ maxWidth: "92%", padding: subtitleBackground ? "5px 12px" : "2px 4px", borderRadius: 6, background: subtitleBackground ? "rgba(0,0,0,.78)" : "transparent", color: COLORS.teal, fontSize: 17 * (subtitleSize / 100), fontWeight: 700, textAlign: "center", pointerEvents: "auto" }}>{activeCue.fa}</div>}
                       </div>
                     )}
@@ -1404,7 +1434,7 @@ export default function App() {
                   </div>
                   <div className="cards-body">
                     <button className="card-side-nav next" onClick={goToNextCard} title="کارت بعدی">
-                      {isLandscapeCards ? <ChevronDown size={22} /> : <ChevronRight size={24} />}
+                      {isLandscapeCards ? <ChevronDown size={24} /> : <ChevronRight size={24} />}
                     </button>
                     <div
                       ref={cardsRef}
@@ -1419,7 +1449,6 @@ export default function App() {
                           const translating = !!cardTranslateLoading[index];
                           const faMissing = !cue.fa || !cue.fa.trim();
                           const canShowTranslateBtn = faMissing && !!cue.en?.trim();
-                          const isWordPopupHere = wordPopup && wordPopup.cardIndex === index;
                           return (
                             <div
                               key={index} data-card={index} className="subtitle-card"
@@ -1432,20 +1461,11 @@ export default function App() {
                                 minWidth: 230, maxWidth: 230,
                               }}
                             >
-                              {isWordPopupHere && (
-                                <div className="word-popup" onClick={(e) => e.stopPropagation()}>
-                                  <div className="word-popup-header">
-                                    <span style={{ color: COLORS.yellow, fontWeight: 900, fontSize: 13 }}>{wordPopup.word}</span>
-                                    <button className="word-popup-close" onClick={() => setWordPopup(null)}><X size={16} /></button>
-                                  </div>
-                                  <div style={{ color: COLORS.teal, fontSize: 14, fontWeight: 800, lineHeight: 1.6 }}>{wordPopup.text}</div>
-                                </div>
-                              )}
                               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, color: COLORS.muted, fontSize: Math.max(9, cardFontSize - 2) }}>
                                 <span>کارت {index + 1}</span>
                                 <span>{formatTime(cue.start)}</span>
                               </div>
-                              {cue.en && <div style={{ color: COLORS.yellow, fontSize: cardFontSize, lineHeight: 1.6, direction: "ltr", textAlign: "left" }}>{renderEnglish(cue.en, `card-${index}`, index)}</div>}
+                              {cue.en && <div style={{ color: COLORS.yellow, fontSize: cardFontSize, lineHeight: 1.6, direction: "ltr", textAlign: "left" }}>{renderEnglish(cue.en, `card-${index}`)}</div>}
                               {canShowTranslateBtn && <button type="button" onClick={(e) => { e.stopPropagation(); translateCardToPersian(index); }} disabled={translating} style={{ width: "100%", marginTop: 10, border: `1px solid ${COLORS.border}`, background: "rgba(0,0,0,.25)", color: COLORS.text, padding: "9px 10px", borderRadius: 10, cursor: translating ? "not-allowed" : "pointer", fontSize: Math.max(10, cardFontSize - 1), fontWeight: 900 }}>{translating ? "در حال ترجمه..." : "ترجمه به فارسی"}</button>}
                               {cue.fa && cue.fa.trim() && <div style={{ marginTop: 10, color: COLORS.teal, fontSize: cardFontSize, lineHeight: 1.7, textAlign: "right" }}>{cue.fa}</div>}
                             </div>
@@ -1456,7 +1476,7 @@ export default function App() {
                       )}
                     </div>
                     <button className="card-side-nav prev" onClick={goToPreviousCard} title="کارت قبلی">
-                      {isLandscapeCards ? <ChevronUp size={22} /> : <ChevronLeft size={24} />}
+                      {isLandscapeCards ? <ChevronUp size={24} /> : <ChevronLeft size={24} />}
                     </button>
                   </div>
                 </section>
@@ -1464,6 +1484,12 @@ export default function App() {
             )}
         </div>
       </main>
+
+      {wordTooltip && (
+        <div className="word-tooltip" style={{ top: wordTooltip.top, left: wordTooltip.left }}>
+          {wordTooltip.text}
+        </div>
+      )}
     </div>
   );
 }
