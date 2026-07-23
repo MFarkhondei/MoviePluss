@@ -341,6 +341,8 @@ export default function App() {
   const cuesRef = useRef([]);
   const currentCueRef = useRef(-1);
   const repeatRef = useRef(true);
+  const repeatCountRef = useRef(0); // 0 = loop forever; >0 = repeat that many times then advance
+  const repeatProgressRef = useRef(0); // how many loops of the current cue have completed so far
 
   const translationCacheRef = useRef({});
   const translationWordCacheRef = useRef({});
@@ -383,6 +385,7 @@ export default function App() {
   const [playbackRate, setPlaybackRate] = useState(1);
 
   const [repeatOn, setRepeatOn] = useState(true);
+  const [repeatCount, setRepeatCount] = useState(0);
   const [showEnglish, setShowEnglish] = useState(false);
   const [showPersian, setShowPersian] = useState(false);
 
@@ -441,6 +444,7 @@ export default function App() {
       if (typeof s?.cardsRatioLandscape === "number") setCardsRatioLandscape(Math.max(minCardsRatio, Math.min(maxCardsRatio, s.cardsRatioLandscape)));
       if (typeof s?.playbackRate === "number") setPlaybackRate(s.playbackRate);
       if (typeof s?.repeatOn === "boolean") setRepeatOn(s.repeatOn);
+      if (typeof s?.repeatCount === "number") setRepeatCount(Math.max(0, s.repeatCount));
       if (typeof s?.showEnglish === "boolean") setShowEnglish(s.showEnglish);
       if (typeof s?.showPersian === "boolean") setShowPersian(s.showPersian);
       if (typeof s?.brightness === "number") setBrightness(s.brightness);
@@ -455,6 +459,8 @@ export default function App() {
   useEffect(() => { cuesRef.current = cues; }, [cues]);
   useEffect(() => { currentCueRef.current = currentCue; }, [currentCue]);
   useEffect(() => { repeatRef.current = repeatOn; }, [repeatOn]);
+  useEffect(() => { repeatCountRef.current = repeatCount; }, [repeatCount]);
+  useEffect(() => { repeatProgressRef.current = 0; }, [currentCue]);
 
   useEffect(() => {
     if (!videoRef.current) return;
@@ -501,11 +507,11 @@ export default function App() {
   const persistSettings = useCallback(() => {
     try {
       localStorage.setItem(STORAGE_SETTINGS, JSON.stringify({
-        cardsRatio, cardsRatioLandscape, playbackRate, repeatOn, showEnglish, showPersian,
+        cardsRatio, cardsRatioLandscape, playbackRate, repeatOn, repeatCount, showEnglish, showPersian,
         brightness, subtitleSize, subtitleBottom, subtitleBackground, volume, cardFontSize,
       }));
     } catch {}
-  }, [cardsRatio, cardsRatioLandscape, playbackRate, repeatOn, showEnglish, showPersian, brightness, subtitleSize, subtitleBottom, subtitleBackground, volume, cardFontSize]);
+  }, [cardsRatio, cardsRatioLandscape, playbackRate, repeatOn, repeatCount, showEnglish, showPersian, brightness, subtitleSize, subtitleBottom, subtitleBackground, volume, cardFontSize]);
 
   useEffect(() => { persistSettings(); }, [persistSettings]);
 
@@ -667,8 +673,25 @@ export default function App() {
       const next = list[index + 1];
       const boundary = next ? next.start : current.end;
       if (time >= boundary - 0.04) {
-        videoRef.current.currentTime = current.start;
-        return;
+        const limit = repeatCountRef.current;
+        if (limit > 0) {
+          repeatProgressRef.current += 1;
+          if (repeatProgressRef.current < limit) {
+            videoRef.current.currentTime = current.start;
+            return;
+          }
+          // Final repeat reached — reveal the translation, then move on.
+          repeatProgressRef.current = 0;
+          translateCardToPersian(index);
+          if (next) {
+            jumpToCue(index + 1, true);
+            return;
+          }
+          // No next cue — nothing left to loop into; let playback continue naturally.
+        } else {
+          videoRef.current.currentTime = current.start;
+          return;
+        }
       }
     }
 
@@ -1459,6 +1482,11 @@ export default function App() {
                         <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>نمایش زیرنویس انگلیسی<input type="checkbox" checked={showEnglish} onChange={(e) => setShowEnglish(e.target.checked)} /></label>
                         <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>نمایش زیرنویس فارسی<input type="checkbox" checked={showPersian} onChange={(e) => setShowPersian(e.target.checked)} /></label>
                         <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>تکرار یک جمله<input type="checkbox" checked={repeatOn} onChange={(e) => setRepeatOn(e.target.checked)} /></label>
+                        {repeatOn && (
+                          <div style={{ marginTop: 10 }}>
+                            <SettingRange label="تعداد تکرار (۰ = نامحدود)" value={repeatCount} min={0} max={10} onChange={setRepeatCount} />
+                          </div>
+                        )}
                       </div>
                     )}
 
