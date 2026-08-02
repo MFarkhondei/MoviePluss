@@ -402,6 +402,8 @@ export default function App() {
   const [cardFontSize, setCardFontSize] = useState(12);
   const [audioTracks, setAudioTracks] = useState([]);
   const [selectedAudioId, setSelectedAudioId] = useState(null);
+  // null = unknown / no video yet; true = browser exposes AudioTrackList; false = not supported
+  const [audioTracksApiAvailable, setAudioTracksApiAvailable] = useState(null);
   // { word, text, loading, top, left } — top/left are viewport coordinates
   // (from the hovered word's own bounding box), so one tooltip works for
   // words anywhere: in a card, or in the subtitle overlaid on the video.
@@ -722,19 +724,27 @@ export default function App() {
 
   const refreshAudioTracks = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !video.audioTracks) {
+    // audioTracks exists in Safari; in Chrome/Firefox it is usually undefined
+    // unless experimental web platform features are enabled.
+    if (!video || !("audioTracks" in video) || !video.audioTracks) {
+      setAudioTracksApiAvailable(false);
       setAudioTracks([]);
       setSelectedAudioId(null);
       return;
     }
+    setAudioTracksApiAvailable(true);
     const list = [];
     for (let i = 0; i < video.audioTracks.length; i++) {
       const t = video.audioTracks[i];
       const id = t.id || String(i);
+      const label =
+        (t.label && t.label.trim()) ||
+        (t.language && t.language.trim()) ||
+        `ترک ${i + 1}`;
       list.push({
         id,
         index: i,
-        label: t.label || t.language || `Track ${i + 1}`,
+        label,
         language: t.language || "",
         enabled: !!t.enabled,
       });
@@ -750,6 +760,7 @@ export default function App() {
     for (let i = 0; i < video.audioTracks.length; i++) {
       const t = video.audioTracks[i];
       const trackId = t.id || String(i);
+      // Only one track enabled at a time (mixing multiple can sound odd)
       t.enabled = trackId === id;
     }
     setSelectedAudioId(id);
@@ -763,7 +774,7 @@ export default function App() {
     videoRef.current.playbackRate = playbackRate;
     refreshAudioTracks();
 
-    // Some browsers fire audio track list changes after metadata is ready
+    // Tracks may appear after metadata; re-scan on a few later events
     const tracks = videoRef.current.audioTracks;
     if (tracks) {
       tracks.onaddtrack = refreshAudioTracks;
@@ -808,6 +819,7 @@ export default function App() {
     setWordTooltip(null);
     setAudioTracks([]);
     setSelectedAudioId(null);
+    setAudioTracksApiAvailable(null);
 
     if (englishText || persianText) {
       const merged = mergeSubtitles(englishText || "", persianText || "");
@@ -1470,6 +1482,8 @@ export default function App() {
                       ref={videoRef}
                       src={videoUrl}
                       onLoadedMetadata={handleVideoLoaded}
+                      onLoadedData={refreshAudioTracks}
+                      onCanPlay={refreshAudioTracks}
                       onTimeUpdate={handleTimeUpdate}
                       onPlay={() => setIsPlaying(true)}
                       onPause={() => { setIsPlaying(false); setControlsVisible(true); saveCurrentTime(); }}
@@ -1531,9 +1545,9 @@ export default function App() {
                         <SettingRange label="اندازه فونت کارت‌ها" value={cardFontSize} min={10} max={22} onChange={setCardFontSize} />
                         <SettingRange label="اندازه زیرنویس" value={subtitleSize} min={60} max={180} onChange={setSubtitleSize} />
                         <SettingRange label="موقعیت زیرنویس" value={subtitleBottom} min={5} max={180} onChange={setSubtitleBottom} />
-                        {audioTracks.length > 1 && (
-                          <label style={{ display: "block", marginTop: 10, marginBottom: 12, color: COLORS.text, fontSize: 11 }}>
-                            <div style={{ marginBottom: 5 }}>ترک صوتی (Audio Track)</div>
+                        <div style={{ marginTop: 10, marginBottom: 12, color: COLORS.text, fontSize: 11 }}>
+                          <div style={{ marginBottom: 5, fontWeight: 700 }}>ترک صوتی (Audio Track)</div>
+                          {audioTracks.length > 1 ? (
                             <select
                               value={selectedAudioId ?? ""}
                               onChange={(e) => selectAudioTrack(e.target.value)}
@@ -1545,8 +1559,19 @@ export default function App() {
                                 </option>
                               ))}
                             </select>
-                          </label>
-                        )}
+                          ) : audioTracks.length === 1 ? (
+                            <div style={{ color: COLORS.muted, fontSize: 11, lineHeight: 1.6 }}>
+                              فقط یک ترک صوتی در این فایل شناسایی شد: {audioTracks[0].label}
+                              {audioTracks[0].language ? ` (${audioTracks[0].language})` : ""}
+                            </div>
+                          ) : (
+                            <div style={{ color: COLORS.muted, fontSize: 11, lineHeight: 1.7 }}>
+                              {audioTracksApiAvailable === false
+                                ? "مرورگر شما API ترک صوتی را پشتیبانی نمی‌کند (یا غیرفعال است). در Safari معمولاً کار می‌کند. در Chrome: chrome://flags → Experimental Web Platform features را فعال کنید و صفحه را رفرش کنید."
+                                : "ترک صوتی شناسایی نشد. اگر فایل چندزبانه است، با Safari امتحان کنید یا در Chrome فلگ Experimental Web Platform features را روشن کنید."}
+                            </div>
+                          )}
+                        </div>
                         <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>نمایش زیرنویس انگلیسی<input type="checkbox" checked={showEnglish} onChange={(e) => setShowEnglish(e.target.checked)} /></label>
                         <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>نمایش زیرنویس فارسی<input type="checkbox" checked={showPersian} onChange={(e) => setShowPersian(e.target.checked)} /></label>
                         <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, color: COLORS.text, fontSize: 12 }}>تکرار یک جمله<input type="checkbox" checked={repeatOn} onChange={(e) => setRepeatOn(e.target.checked)} /></label>
